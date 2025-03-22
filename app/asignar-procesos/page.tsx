@@ -183,6 +183,7 @@ export default function AsignarProcesosPage() {
                 commitmentDate: commitment.date, // Usar el campo date de la API
                 status: commitment.status,
                 graceDays: commitment.graceDays, // Añadir el campo graceDays
+                payrollFrequencies: commitment.payrollFrequencies || [], // Añadir el campo payrollFrequencies
                 process: {
                   id: commitment.process.id,
                   name: commitment.process.name,
@@ -566,6 +567,21 @@ export default function AsignarProcesosPage() {
       accessorKey: "commitmentDate",
       header: "Fecha de Compromiso",
       cell: ({ row }) => {
+        const assignment = row.original
+
+        // Verificar si tiene frecuencias de nómina
+        if (assignment.payrollFrequencies && assignment.payrollFrequencies.length > 0) {
+          const frequencies = assignment.payrollFrequencies.map((freq) =>
+            freq === "QUINCENAL" ? "Quincenal" : "Semanal",
+          )
+          return (
+            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+              {frequencies.join(" y ")}
+            </Badge>
+          )
+        }
+
+        // Si no tiene fecha de compromiso
         const dateString = row.getValue("commitmentDate") as string
         if (!dateString) return "No disponible"
 

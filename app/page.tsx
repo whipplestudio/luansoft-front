@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import type React from "react"
+
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   ArrowUpDown,
   Filter,
@@ -33,6 +35,7 @@ import { ClientDetailDialog } from "@/components/ClientDetailDialog"
 import { useRouter } from "next/navigation"
 import { axiosInstance } from "@/lib/axios"
 import { toast } from "sonner"
+import { debounce } from "lodash"
 
 const ITEMS_PER_PAGE = 10
 
@@ -96,7 +99,7 @@ const parseCompletionPercentage = (percentage: string): number => {
   return Number.parseFloat(percentage.replace("%", ""))
 }
 
-// Convertir ApiClient a FiscalDeliverable para mantener compatibilidad con los componentes existentes
+// Modificar la función mapApiClientToFiscalDeliverable para incluir el deliveryStatus en los procesos mapeados
 const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable => {
   const completionPercentage = parseCompletionPercentage(client.completionPercentage)
 
@@ -107,6 +110,7 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
     status: p.status === "PAID" ? "completed" : p.deliveryStatus === "onTime" ? "in_progress" : "pending",
     progress: p.status === "PAID" ? 100 : p.deliveryStatus === "onTime" ? 50 : 0,
     dueDate: p.commitmentDate,
+    deliveryStatus: p.deliveryStatus, // Añadir el deliveryStatus al proceso
   }))
 
   return {
@@ -147,6 +151,7 @@ const columns: ColumnDef<FiscalDeliverable>[] = [
     header: "Responsable",
     cell: ({ row }) => <div className="text-xs">{row.getValue("responsible")}</div>,
   },
+  // Modificar la columna de procesos para mostrar el estado de entrega
   {
     accessorKey: "processes",
     header: "Procesos",
@@ -159,11 +164,17 @@ const columns: ColumnDef<FiscalDeliverable>[] = [
               key={index}
               variant="outline"
               className={`text-xs ${
-                process.status === "completed"
+                process.deliveryStatus === "onTime"
                   ? "bg-green-100 text-green-800 border-green-300"
-                  : process.status === "pending"
-                    ? "bg-red-100 text-red-800 border-red-300"
-                    : "bg-yellow-100 text-yellow-800 border-yellow-300"
+                  : process.deliveryStatus === "atRisk"
+                    ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                    : process.deliveryStatus === "delayed"
+                      ? "bg-red-100 text-red-800 border-red-300"
+                      : process.status === "completed"
+                        ? "bg-green-100 text-green-800 border-green-300"
+                        : process.status === "pending"
+                          ? "bg-red-100 text-red-800 border-red-300"
+                          : "bg-yellow-100 text-yellow-800 border-yellow-300"
               }`}
             >
               {process.name}
@@ -448,6 +459,120 @@ export default function DashboardPage() {
     fetchClients(page, ITEMS_PER_PAGE, filters)
   }
 
+  // Debounced function para el filtro de empresa
+  const debouncedCompanyFilter = useCallback(
+    debounce((value: string) => {
+      handleFilter("companyName", value)
+    }, 500),
+    [handleFilter],
+  )
+
+  // Primero, vamos a modificar el componente FilterContent para usar un estado local y un useEffect con debounce
+
+  // Reemplazar el componente FilterContent actual con esta versión:
+  const FilterContent = () => {
+    // Estado local para el valor del input de empresa
+    const [companyNameInput, setCompanyNameInput] = useState(filters.companyName)
+    // Ref para almacenar el timeout
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+    // Manejar cambio en el input de empresa con debounce
+    const handleCompanyNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      setCompanyNameInput(value)
+
+      // Limpiar el timeout anterior si existe
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+
+      // Configurar un nuevo timeout
+      timeoutRef.current = setTimeout(() => {
+        handleFilter("companyName", value)
+      }, 500)
+    }
+
+    // Limpiar el timeout cuando el componente se desmonta
+    useEffect(() => {
+      return () => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+        }
+      }
+    }, [])
+
+    // Actualizar el input local cuando cambia el filtro global
+    useEffect(() => {
+      setCompanyNameInput(filters.companyName)
+    }, [filters.companyName])
+
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="companyName">Empresa</Label>
+          <Input
+            id="companyName"
+            placeholder="Filtrar por empresa"
+            value={companyNameInput}
+            onChange={handleCompanyNameChange}
+            className="text-sm h-8"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Estado</Label>
+          <div className="space-y-2">
+            {[
+              { value: "onTime", label: "En tiempo", bgColor: "bg-green-100", textColor: "text-green-800" },
+              { value: "atRisk", label: "En riesgo", bgColor: "bg-yellow-100", textColor: "text-yellow-800" },
+              { value: "delayed", label: "Atrasados", bgColor: "bg-red-100", textColor: "text-red-800" },
+              { value: "completed", label: "Completados", bgColor: "bg-blue-100", textColor: "text-blue-800" },
+            ].map((status) => (
+              <div key={status.value} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`status-${status.value}`}
+                  checked={filters.statuses.includes(status.value)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      handleFilter("statuses", [...filters.statuses, status.value])
+                    } else {
+                      handleFilter(
+                        "statuses",
+                        filters.statuses.filter((s) => s !== status.value),
+                      )
+                    }
+                  }}
+                />
+                <div className={`w-4 h-4 rounded-full ${status.bgColor} ${status.textColor}`}></div>
+                <Label htmlFor={`status-${status.value}`} className="text-sm">
+                  {status.label}
+                </Label>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="contadorIds">Responsables</Label>
+          <MultiSelect
+            options={allContadores.map((contador) => ({ label: contador.name, value: contador.id }))}
+            selected={filters.contadorIds}
+            onChange={(selected) => handleFilter("contadorIds", selected)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="processIds">Procesos</Label>
+          <MultiSelect
+            options={allProcesses.map((process) => ({ label: process.name, value: process.id }))}
+            selected={filters.processIds}
+            onChange={(selected) => handleFilter("processIds", selected)}
+          />
+        </div>
+        <Button onClick={clearFilters} variant="outline" className="w-full">
+          Limpiar filtros
+        </Button>
+      </div>
+    )
+  }
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen()
@@ -464,71 +589,6 @@ export default function DashboardPage() {
     setSelectedClient(client)
     setIsDetailDialogOpen(true)
   }
-
-  const FilterContent = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="companyName">Empresa</Label>
-        <Input
-          id="companyName"
-          placeholder="Filtrar por empresa"
-          value={filters.companyName}
-          onChange={(e) => handleFilter("companyName", e.target.value)}
-          className="text-sm h-8"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Estado</Label>
-        <div className="space-y-2">
-          {[
-            { value: "onTime", label: "En tiempo", bgColor: "bg-green-100", textColor: "text-green-800" },
-            { value: "atRisk", label: "En riesgo", bgColor: "bg-yellow-100", textColor: "text-yellow-800" },
-            { value: "delayed", label: "Atrasados", bgColor: "bg-red-100", textColor: "text-red-800" },
-          ].map((status) => (
-            <div key={status.value} className="flex items-center space-x-2">
-              <Checkbox
-                id={`status-${status.value}`}
-                checked={filters.statuses.includes(status.value)}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    handleFilter("statuses", [...filters.statuses, status.value])
-                  } else {
-                    handleFilter(
-                      "statuses",
-                      filters.statuses.filter((s) => s !== status.value),
-                    )
-                  }
-                }}
-              />
-              <div className={`w-4 h-4 rounded-full ${status.bgColor} ${status.textColor}`}></div>
-              <Label htmlFor={`status-${status.value}`} className="text-sm">
-                {status.label}
-              </Label>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contadorIds">Responsables</Label>
-        <MultiSelect
-          options={allContadores.map((contador) => ({ label: contador.name, value: contador.id }))}
-          selected={filters.contadorIds}
-          onChange={(selected) => handleFilter("contadorIds", selected)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="processIds">Procesos</Label>
-        <MultiSelect
-          options={allProcesses.map((process) => ({ label: process.name, value: process.id }))}
-          selected={filters.processIds}
-          onChange={(selected) => handleFilter("processIds", selected)}
-        />
-      </div>
-      <Button onClick={clearFilters} variant="outline" className="w-full">
-        Limpiar filtros
-      </Button>
-    </div>
-  )
 
   if (userRole === "dashboard") {
     return (

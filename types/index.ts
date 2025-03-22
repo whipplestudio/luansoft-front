@@ -23,6 +23,7 @@ export interface Process {
   createdAt?: string
   updatedAt?: string
   dueDate?: string // Añadir campo para fecha de vencimiento
+  deliveryStatus?: "onTime" | "atRisk" | "delayed" // Añadir el campo deliveryStatus
 }
 
 // Actualizo la interfaz Client para incluir el regimenFiscalId
@@ -100,7 +101,10 @@ export interface HistoryEntry {
   }[]
 }
 
-// Actualizo la interfaz ProcessAssignment para incluir graceDays
+// Actualizo la interfaz ProcessAssignment para incluir payrollFrequencies
+// Buscar la definición de ProcessAssignment y reemplazarla con esta versión actualizada
+
+// Con esta versión actualizada:
 export interface ProcessAssignment {
   id: string
   clientId: string
@@ -108,7 +112,8 @@ export interface ProcessAssignment {
   commitmentDate: string
   process: Process
   status?: "ACTIVE" | "INACTIVE" | "PAID"
-  graceDays?: number // Añado el campo graceDays como opcional
+  graceDays?: number
+  payrollFrequencies?: string[] // Añadir el campo payrollFrequencies
 }
 
 export interface Dashboard {

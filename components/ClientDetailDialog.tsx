@@ -4,7 +4,7 @@ import { es } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProgressBar } from "@/components/ProgressBar"
-import type { FiscalDeliverable, Process } from "@/types"
+import type { FiscalDeliverable } from "@/types"
 import { CalendarIcon } from "lucide-react"
 
 interface ClientDetailDialogProps {
@@ -38,7 +38,25 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
     return sortedDates[0].dueDate
   }
 
-  const getStatusColor = (status: Process["status"]) => {
+  // Modificar la función getStatusColor para incluir el estado "completed"
+  const getStatusColor = (status: string, deliveryStatus?: string) => {
+    // Si tenemos deliveryStatus, usarlo para determinar el color
+    if (deliveryStatus) {
+      switch (deliveryStatus) {
+        case "completed":
+          return "bg-green-100 text-green-800 border-green-300"
+        case "onTime":
+          return "bg-green-100 text-green-800 border-green-300"
+        case "atRisk":
+          return "bg-yellow-100 text-yellow-800 border-yellow-300"
+        case "delayed":
+          return "bg-red-100 text-red-800 border-red-300"
+        default:
+          return "bg-gray-100 text-gray-800 border-gray-300"
+      }
+    }
+
+    // Fallback al comportamiento anterior si no hay deliveryStatus
     switch (status) {
       case "completed":
         return "bg-green-100 text-green-800 border-green-300"
@@ -93,12 +111,23 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
                   <div key={index} className="flex flex-col space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{process.name}</span>
-                      <Badge variant="outline" className={`text-xs ${getStatusColor(process.status)}`}>
-                        {process.status === "completed"
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${getStatusColor(process.status, process.deliveryStatus)}`}
+                      >
+                        {process.deliveryStatus === "completed"
                           ? "Completado"
-                          : process.status === "in_progress"
-                            ? "En progreso"
-                            : "Pendiente"}
+                          : process.deliveryStatus === "onTime"
+                            ? "En tiempo"
+                            : process.deliveryStatus === "atRisk"
+                              ? "En riesgo"
+                              : process.deliveryStatus === "delayed"
+                                ? "Atrasado"
+                                : process.status === "completed"
+                                  ? "Completado"
+                                  : process.status === "in_progress"
+                                    ? "En progreso"
+                                    : "Pendiente"}
                       </Badge>
                     </div>
                     <div className="flex items-center text-xs text-gray-500">
