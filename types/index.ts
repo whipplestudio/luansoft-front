@@ -25,6 +25,7 @@ export interface Process {
   dueDate?: string // Añadir campo para fecha de vencimiento
 }
 
+// Actualizo la interfaz Client para incluir el regimenFiscalId
 export interface Client {
   id: string
   name: string
@@ -36,6 +37,7 @@ export interface Client {
   processes: Process[]
   lastAssignedDate: string | null // Date string of last assignment
   email?: string // Añadir campo email
+  regimenFiscalId?: string // Añadir campo regimenFiscalId
 }
 
 export interface ClientType {
@@ -71,7 +73,6 @@ export type SemaphoreStatus = "green" | "yellow" | "red"
 export interface FiscalDeliverable {
   id: string
   client: string
-  company?: string
   deliverableType: string
   period: "Mensual" | "Trimestral" | "Anual"
   dueDate: string
@@ -79,7 +80,6 @@ export interface FiscalDeliverable {
   observations: string
   processes: Process[]
   progressPercentage: number
-  originalData?: object
 }
 
 export interface Document {
@@ -100,13 +100,15 @@ export interface HistoryEntry {
   }[]
 }
 
+// Actualizo la interfaz ProcessAssignment para incluir graceDays
 export interface ProcessAssignment {
   id: string
   clientId: string
   processId: string
   commitmentDate: string
   process: Process
-  status?: "ACTIVE" | "INACTIVE" | "PAID" // Añadir campo status
+  status?: "ACTIVE" | "INACTIVE" | "PAID"
+  graceDays?: number // Añado el campo graceDays como opcional
 }
 
 export interface Dashboard {

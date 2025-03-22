@@ -11,8 +11,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import axiosInstance from "@/api/config"
+import { isAxiosError } from "axios"
 import { Loader2 } from "lucide-react"
 
+// Primero, actualizo el esquema de validación para incluir el regimenFiscalId
 const clientSchema = z.object({
   firstName: z.string().min(1, "El nombre es requerido"),
   lastName: z.string().min(1, "El apellido es requerido"),
@@ -20,8 +22,10 @@ const clientSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
   type: z.enum(["FISICA", "MORAL"]),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
+  regimenFiscalId: z.string().min(1, "El régimen fiscal es requerido"),
 })
 
+// Actualizo la interfaz ClientFormData para incluir el nuevo campo
 type ClientFormData = z.infer<typeof clientSchema>
 
 interface Client {
@@ -32,6 +36,7 @@ interface Client {
   email: string
   type: "FISICA" | "MORAL"
   status: "ACTIVE" | "INACTIVE"
+  regimenFiscalId: string
 }
 
 interface DialogCreateClientProps {
@@ -43,6 +48,8 @@ interface DialogCreateClientProps {
 
 export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: DialogCreateClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Añado el estado para almacenar los regímenes fiscales
+  const [regimenesFiscales, setRegimenesFiscales] = useState<Array<{ id: string; nombre: string }>>([])
 
   const {
     control,
@@ -58,11 +65,38 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       email: "",
       type: "FISICA",
       password: "",
+      regimenFiscalId: "",
     },
   })
 
+  // Añado la función para obtener los regímenes fiscales
+  const fetchRegimenesFiscales = async () => {
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) throw new Error("No se encontró el token de autenticación")
+
+      const response = await axiosInstance.get("/regimenfiscal/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.data.success) {
+        setRegimenesFiscales(response.data.data.data)
+      } else {
+        throw new Error(response.data.message || "Error al obtener los regímenes fiscales")
+      }
+    } catch (error) {
+      console.error("Error fetching regímenes fiscales:", error)
+      toast.error("Error al cargar los regímenes fiscales")
+    }
+  }
+
+  // Modifico el useEffect para cargar los regímenes fiscales cuando se abre el diálogo
   useEffect(() => {
     if (isOpen) {
+      fetchRegimenesFiscales()
+
       if (client) {
         reset({
           firstName: client.firstName,
@@ -70,6 +104,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
           company: client.company,
           email: client.email,
           type: client.type,
+          regimenFiscalId: client.regimenFiscalId || "", // Añado el regimenFiscalId
         })
       } else {
         reset({
@@ -79,6 +114,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
           email: "",
           type: "FISICA",
           password: "",
+          regimenFiscalId: "", // Añado el regimenFiscalId con valor por defecto vacío
         })
       }
     }
@@ -98,7 +134,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
         const changedFields = Object.keys(dirtyFields).reduce(
           (acc, key) => {
             if (key !== "password") {
-              acc[key] = data[key]
+              acc[key as keyof ClientFormData] = data[key as keyof ClientFormData] as any
             }
             return acc
           },
@@ -128,14 +164,18 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       }
     } catch (error) {
       console.error("Error:", error)
-      if (error.response) {
-        const { status, data } = error.response
-        if (status === 404) {
-          toast.error("Cliente no encontrado")
-        } else if (status === 409) {
-          toast.error("El correo electrónico ya está registrado")
+      if (isAxiosError(error)) {
+        if (error.response) {
+          const { status, data } = error.response
+          if (status === 404) {
+            toast.error("Cliente no encontrado")
+          } else if (status === 409) {
+            toast.error("El correo electrónico ya está registrado")
+          } else {
+            toast.error(data.message || "Error al procesar la solicitud")
+          }
         } else {
-          toast.error(data.message || "Error al procesar la solicitud")
+          toast.error("Error de conexión. Por favor, intente nuevamente")
         }
       } else {
         toast.error("Error de conexión. Por favor, intente nuevamente")
@@ -153,6 +193,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       email: "",
       type: "FISICA",
       password: "",
+      regimenFiscalId: "",
     })
     onOpenChange(false)
   }
@@ -202,6 +243,29 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
               )}
             />
             {errors.type && <p className="text-red-500 text-sm">{errors.type.message}</p>}
+          </div>
+          {/* Añado el select de régimen fiscal al formulario, justo antes del campo de contraseña */}
+          <div>
+            <Label htmlFor="regimenFiscalId">Régimen Fiscal</Label>
+            <Controller
+              name="regimenFiscalId"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar régimen fiscal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {regimenesFiscales.map((regimen) => (
+                      <SelectItem key={regimen.id} value={regimen.id}>
+                        {regimen.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.regimenFiscalId && <p className="text-red-500 text-sm">{errors.regimenFiscalId.message}</p>}
           </div>
           {!client && (
             <div>

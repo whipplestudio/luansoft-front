@@ -5,7 +5,6 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown, MoreHorizontal, PlusCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
-import type { Client } from "@/types"
 import { mockContadores } from "@/lib/mock-data"
 import { DialogCreateClient } from "@/components/DialogCreateClient"
 import { toast, Toaster } from "sonner"
@@ -28,16 +27,34 @@ interface ApiClient {
   firstName: string
   lastName: string
   company: string
-  status: string
+  status: "ACTIVE" | "INACTIVE"
   userId: string
   email: string
-  type: string
+  type: "FISICA" | "MORAL"
   limitDay: number
   graceDays: number
   payroll: boolean
   contadorId: string | null
   createdAt: string
   updatedAt: string
+  regimenFiscalId?: string
+}
+
+// Actualizo la interfaz Client para incluir el regimenFiscalId
+interface Client {
+  id: string
+  name: string
+  firstName: string
+  lastName: string
+  company: string
+  email: string
+  type: "FISICA" | "MORAL"
+  assignedTo: string | null
+  status: string
+  processes: []
+  razonSocial: string
+  lastAssignedDate: string
+  regimenFiscalId?: string // Añado el regimenFiscalId como opcional
 }
 
 interface ApiResponse {
@@ -185,7 +202,7 @@ export default function ClientesPage() {
       })
 
       if (response.data.success) {
-        // Mapear los datos de la API al formato que espera nuestra aplicación
+        // Actualizo la función de mapeo para incluir el regimenFiscalId
         const mappedClients: Client[] = response.data.data.data.map((apiClient) => ({
           id: apiClient.id,
           name: `${apiClient.firstName} ${apiClient.lastName}`,
@@ -199,6 +216,7 @@ export default function ClientesPage() {
           processes: [],
           razonSocial: apiClient.company, // Usando company como razonSocial por ahora
           lastAssignedDate: apiClient.updatedAt,
+          regimenFiscalId: apiClient.regimenFiscalId, // Añado el regimenFiscalId
         }))
 
         setClients(mappedClients)
@@ -274,7 +292,7 @@ export default function ClientesPage() {
         }
       } catch (error) {
         console.error("Error al eliminar el cliente:", error)
-        if (error.response && error.response.status === 404) {
+        if ((error as any).response && (error as any).response.status === 404) {
           toast.error("Cliente no encontrado")
         } else {
           toast.error("Error al eliminar el cliente")

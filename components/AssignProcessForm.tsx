@@ -16,19 +16,25 @@ import { cn } from "@/lib/utils"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ChevronDown } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 
 const assignProcessSchema = z.object({
   clientId: z.string().min(1, "El cliente es requerido"),
   processId: z.string().min(1, "El proceso es requerido"),
-  commitmentDate: z.date({
-    required_error: "La fecha de compromiso es requerida",
-  }),
+  commitmentDate: z
+    .date({
+      required_error: "La fecha de compromiso es requerida",
+    })
+    .optional(),
+  graceDays: z.number().min(0, "Los días de gracia no pueden ser negativos").default(0).optional(),
+  payrollFrequencies: z.array(z.enum(["QUINCENAL", "SEMANAL"])).optional(),
 })
 
 type AssignProcessFormData = z.infer<typeof assignProcessSchema>
 
 interface AssignProcessFormProps {
-  onSuccess: (data: { clientId: string; processId: string; commitmentDate: string }) => void
+  onSuccess: (data: any) => void
   onCancel: () => void
   clients: Client[]
   processes: Process[]
@@ -46,6 +52,7 @@ export function AssignProcessForm({
   const [availableProcesses, setAvailableProcesses] = useState<Process[]>(processes)
   const [openClient, setOpenClient] = useState(false)
   const [openProcess, setOpenProcess] = useState(false)
+  const [isPayrollProcess, setIsPayrollProcess] = useState(false)
 
   const [open, setOpen] = useState(false)
 
@@ -60,6 +67,9 @@ export function AssignProcessForm({
     reset,
   } = useForm<AssignProcessFormData>({
     resolver: zodResolver(assignProcessSchema),
+    defaultValues: {
+      graceDays: 0,
+    },
   })
 
   const selectedClientId = watch("clientId")
@@ -72,20 +82,53 @@ export function AssignProcessForm({
     // No es necesario resetear el proceso seleccionado ya que todos están disponibles
   }, [processes])
 
+  // Añadir un nuevo useEffect para detectar si el proceso seleccionado es nómina
+  useEffect(() => {
+    const selectedProcess = watch("processId")
+    if (selectedProcess) {
+      const process = processes.find((p) => p.id === selectedProcess)
+      if (process) {
+        const isPayroll = process.name.toLowerCase() === "nómina" || process.name.toLowerCase() === "nomina"
+        setIsPayrollProcess(isPayroll)
+
+        // Resetear los campos según el tipo de proceso
+        if (isPayroll) {
+          setValue("commitmentDate", undefined)
+          setValue("graceDays", undefined)
+          setValue("payrollFrequencies", [])
+        } else {
+          setValue("payrollFrequencies", undefined)
+        }
+      }
+    }
+  }, [watch("processId"), processes, setValue])
+
   // Modificar la función onSubmit para formatear correctamente la fecha
   const onSubmit = async (data: AssignProcessFormData) => {
     setIsSubmitting(true)
 
     try {
-      // Formatear la fecha como YYYY-MM-DD para la API
-      const formattedDate = format(data.commitmentDate, "yyyy-MM-dd")
+      let submissionData
+
+      if (isPayrollProcess) {
+        // Datos para proceso de nómina
+        submissionData = {
+          clientId: data.clientId,
+          processId: data.processId,
+          payrollFrequencies: data.payrollFrequencies,
+        }
+      } else {
+        // Datos para otros procesos
+        submissionData = {
+          clientId: data.clientId,
+          processId: data.processId,
+          commitmentDate: data.commitmentDate ? format(data.commitmentDate, "yyyy-MM-dd") : undefined,
+          graceDays: data.graceDays,
+        }
+      }
 
       // Pasar los datos al componente padre
-      onSuccess({
-        clientId: data.clientId,
-        processId: data.processId,
-        commitmentDate: formattedDate,
-      })
+      onSuccess(submissionData)
 
       setIsSubmitting(false)
       reset()
@@ -207,30 +250,107 @@ export function AssignProcessForm({
         {errors.processId && <p className="text-red-500 text-sm">{errors.processId.message}</p>}
       </div>
 
-      <div>
-        <Label htmlFor="commitmentDate">Fecha de Compromiso</Label>
-        <Controller
-          name="commitmentDate"
-          control={control}
-          render={({ field }) => (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {field.value ? format(field.value, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={es} />
-              </PopoverContent>
-            </Popover>
-          )}
-        />
-        {errors.commitmentDate && <p className="text-red-500 text-sm">{errors.commitmentDate.message}</p>}
-      </div>
+      {isPayrollProcess ? (
+        <div>
+          <Label>Frecuencia de Nómina</Label>
+          <div className="space-y-2 mt-2">
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="payrollFrequencies"
+                control={control}
+                defaultValue={[]}
+                render={({ field }) => (
+                  <Checkbox
+                    id="quincenal"
+                    checked={field.value?.includes("QUINCENAL")}
+                    onCheckedChange={(checked) => {
+                      const currentValue = field.value || []
+                      if (checked) {
+                        field.onChange([...currentValue, "QUINCENAL"])
+                      } else {
+                        field.onChange(currentValue.filter((v) => v !== "QUINCENAL"))
+                      }
+                    }}
+                  />
+                )}
+              />
+              <Label htmlFor="quincenal">Quincenal</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="payrollFrequencies"
+                control={control}
+                defaultValue={[]}
+                render={({ field }) => (
+                  <Checkbox
+                    id="semanal"
+                    checked={field.value?.includes("SEMANAL")}
+                    onCheckedChange={(checked) => {
+                      const currentValue = field.value || []
+                      if (checked) {
+                        field.onChange([...currentValue, "SEMANAL"])
+                      } else {
+                        field.onChange(currentValue.filter((v) => v !== "SEMANAL"))
+                      }
+                    }}
+                  />
+                )}
+              />
+              <Label htmlFor="semanal">Semanal</Label>
+            </div>
+          </div>
+          {errors.payrollFrequencies && <p className="text-red-500 text-sm">{errors.payrollFrequencies.message}</p>}
+        </div>
+      ) : (
+        <>
+          <div>
+            <Label htmlFor="commitmentDate">Fecha de Compromiso</Label>
+            <Controller
+              name="commitmentDate"
+              control={control}
+              render={({ field }) => (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !field.value && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {field.value ? format(field.value, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={es} />
+                  </PopoverContent>
+                </Popover>
+              )}
+            />
+            {errors.commitmentDate && <p className="text-red-500 text-sm">{errors.commitmentDate.message}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="graceDays">Días de Gracia</Label>
+            <Controller
+              name="graceDays"
+              control={control}
+              render={({ field }) => (
+                <Input
+                  id="graceDays"
+                  type="number"
+                  min="0"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  className="w-full"
+                />
+              )}
+            />
+            {errors.graceDays && <p className="text-red-500 text-sm">{errors.graceDays.message}</p>}
+          </div>
+        </>
+      )}
 
       <div className="flex justify-end space-x-2">
         <Button type="button" variant="outline" onClick={onCancel}>

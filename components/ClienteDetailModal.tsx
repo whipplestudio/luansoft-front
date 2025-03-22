@@ -1,8 +1,12 @@
+"use client"
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { format, isValid } from "date-fns"
 import { es } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, BuildingIcon, MailIcon, UserIcon, CreditCardIcon, ClockIcon } from "lucide-react"
+import { CalendarIcon, BuildingIcon, MailIcon, UserIcon, CreditCardIcon, ClockIcon, FileTextIcon } from "lucide-react"
+import { useState, useEffect } from "react"
+import axiosInstance from "@/api/config"
 
 interface ClienteDetailModalProps {
   isOpen: boolean
@@ -11,6 +15,36 @@ interface ClienteDetailModalProps {
 }
 
 export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailModalProps) {
+  const [regimenFiscal, setRegimenFiscal] = useState<string>("No especificado")
+
+  useEffect(() => {
+    if (client?.regimenFiscalId) {
+      const fetchRegimenFiscal = async () => {
+        try {
+          const token = localStorage.getItem("accessToken")
+          if (!token) throw new Error("No se encontró el token de autenticación")
+
+          const response = await axiosInstance.get(`/regimenfiscal/${client.regimenFiscalId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (response.data.success) {
+            setRegimenFiscal(response.data.data.nombre)
+          }
+        } catch (error) {
+          console.error("Error fetching régimen fiscal:", error)
+          setRegimenFiscal("No disponible")
+        }
+      }
+
+      fetchRegimenFiscal()
+    } else {
+      setRegimenFiscal("No especificado")
+    }
+  }, [client?.regimenFiscalId])
+
   if (!client) return null
 
   const formatDate = (dateString: string | null | undefined) => {
@@ -71,6 +105,11 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
               <UserIcon className="h-5 w-5 text-gray-400" />
               <span>Contador: {client.contadorId || "No asignado"}</span>
             </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <FileTextIcon className="h-5 w-5 text-gray-400" />
+            <span>Régimen Fiscal: {regimenFiscal}</span>
           </div>
 
           <div className="flex items-center space-x-2 text-sm text-gray-500">

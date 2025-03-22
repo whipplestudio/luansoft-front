@@ -656,14 +656,14 @@ export default function DashboardPage() {
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
           ) : clientsData.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 3xl:grid-cols-10 4xl:grid-cols-12 gap-2 2xl:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 md:gap-6">
               {clientsData.map((item) => (
                 <Card
                   key={item.id}
-                  className="overflow-hidden cursor-pointer 2xl:max-w-[300px] 2xl:mx-auto"
+                  className="overflow-hidden cursor-pointer w-full"
                   onClick={() => handleCardClick(item)}
                 >
-                  <CardContent className="p-2 2xl:p-4">
+                  <CardContent className="p-4">
                     <div className="text-sm font-semibold truncate">{item.client}</div>
                     <div className="text-xs text-gray-500 truncate">{item.company}</div>
                     <div className="flex items-center mt-1">

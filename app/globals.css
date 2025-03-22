@@ -190,3 +190,22 @@
   transition: transform 0.2s ease-in-out;
 }
 
+/* Estilos para evitar superposición de tarjetas en el dashboard */
+.grid > .card {
+  margin-bottom: 1rem;
+  height: 100%;
+}
+
+@media (min-width: 640px) {
+  .grid {
+    display: grid;
+    grid-gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-gap: 1.5rem;
+  }
+}
+

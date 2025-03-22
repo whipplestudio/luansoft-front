@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
 
 export default function AsignarProcesosPage() {
   const [assignments, setAssignments] = useState<ProcessAssignment[]>([])
@@ -51,6 +52,8 @@ export default function AsignarProcesosPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [assignmentToEdit, setAssignmentToEdit] = useState<ProcessAssignment | null>(null)
   const [newCommitmentDate, setNewCommitmentDate] = useState<Date | undefined>(undefined)
+  // Añadir un nuevo estado para los días de gracia después de la declaración del estado newCommitmentDate
+  const [newGraceDays, setNewGraceDays] = useState<number | undefined>(undefined)
   const [isUpdating, setIsUpdating] = useState(false)
 
   // Función para obtener todos los clientes activos para el select
@@ -179,6 +182,7 @@ export default function AsignarProcesosPage() {
                 processId: commitment.processId,
                 commitmentDate: commitment.date, // Usar el campo date de la API
                 status: commitment.status,
+                graceDays: commitment.graceDays, // Añadir el campo graceDays
                 process: {
                   id: commitment.process.id,
                   name: commitment.process.name,
@@ -240,11 +244,13 @@ export default function AsignarProcesosPage() {
     setPagination((prev) => ({ ...prev, limit, page: 1 }))
   }
 
-  // Modificar la función handleAssignProcessSuccess para usar la API real
+  // Actualizo la función handleAssignProcessSuccess para incluir graceDays en la llamada a la API
   const handleAssignProcessSuccess = async (assignment: {
     clientId: string
     processId: string
-    commitmentDate: string
+    commitmentDate?: string
+    graceDays?: number
+    payrollFrequencies?: string[]
   }) => {
     try {
       const token = localStorage.getItem("accessToken")
@@ -252,20 +258,29 @@ export default function AsignarProcesosPage() {
         throw new Error("No authentication token found")
       }
 
+      // Determinar si es un proceso de nómina basado en la presencia de payrollFrequencies
+      const isPayrollProcess = assignment.payrollFrequencies !== undefined
+
+      // Preparar los datos según el tipo de proceso
+      const requestData = isPayrollProcess
+        ? {
+            clientId: assignment.clientId,
+            processId: assignment.processId,
+            payrollFrequencies: assignment.payrollFrequencies,
+          }
+        : {
+            clientId: assignment.clientId,
+            processId: assignment.processId,
+            date: assignment.commitmentDate?.split("T")[0], // Formato YYYY-MM-DD
+            graceDays: assignment.graceDays,
+          }
+
       // Llamar a la API para asignar el proceso
-      const response = await axiosInstance.post(
-        "/process/assign",
-        {
-          clientId: assignment.clientId,
-          processId: assignment.processId,
-          date: assignment.commitmentDate.split("T")[0], // Formato YYYY-MM-DD
+      const response = await axiosInstance.post("/process/assign", requestData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      )
+      })
 
       if (response.data.success) {
         // Obtener los datos de la respuesta
@@ -287,6 +302,7 @@ export default function AsignarProcesosPage() {
           commitmentDate: assignmentData.date,
           status: assignmentData.status, // Añadir el status del proceso
           process,
+          graceDays: assignmentData.graceDays, // Añado los días de gracia
         }
 
         // Verificar si ya existe una asignación para este cliente y proceso
@@ -333,10 +349,13 @@ export default function AsignarProcesosPage() {
       setNewCommitmentDate(new Date(year, month, day))
     }
 
+    // Establecer los días de gracia
+    setNewGraceDays(assignment.graceDays || 0)
+
     setIsEditDialogOpen(true)
   }
 
-  // Función para actualizar la fecha de compromiso
+  // Modificar la función handleUpdateCommitmentDate para incluir los días de gracia
   const handleUpdateCommitmentDate = async () => {
     if (!assignmentToEdit || !newCommitmentDate) return
 
@@ -350,11 +369,12 @@ export default function AsignarProcesosPage() {
       // Formatear la fecha como YYYY-MM-DD
       const formattedDate = format(newCommitmentDate, "yyyy-MM-dd")
 
-      // Llamar a la API para actualizar la fecha de compromiso
+      // Llamar a la API para actualizar la fecha de compromiso y los días de gracia
       const response = await axiosInstance.patch(
         `/process/assign/${assignmentToEdit.clientId}/${assignmentToEdit.processId}`,
         {
           date: formattedDate,
+          graceDays: newGraceDays, // Incluir los días de gracia en la solicitud
         },
         {
           headers: {
@@ -366,25 +386,32 @@ export default function AsignarProcesosPage() {
       if (response.data.success) {
         // Actualizar el estado local
         const updatedAssignments = assignments.map((a) =>
-          a.id === assignmentToEdit.id ? { ...a, commitmentDate: response.data.data.date } : a,
+          a.id === assignmentToEdit.id
+            ? {
+                ...a,
+                commitmentDate: response.data.data.date,
+                graceDays: response.data.data.graceDays,
+              }
+            : a,
         )
 
         setAssignments(updatedAssignments)
-        toast.success("Fecha de compromiso actualizada exitosamente")
+        toast.success("Proceso actualizado exitosamente")
 
         // Recargar los datos para asegurar que todo está sincronizado
         fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient)
       } else {
-        throw new Error(response.data.message || "Error al actualizar la fecha de compromiso")
+        throw new Error(response.data.message || "Error al actualizar el proceso")
       }
     } catch (error) {
-      console.error("Error al actualizar la fecha de compromiso:", error)
-      toast.error("Error al actualizar la fecha de compromiso. Por favor, intente nuevamente.")
+      console.error("Error al actualizar el proceso:", error)
+      toast.error("Error al actualizar el proceso. Por favor, intente nuevamente.")
     } finally {
       setIsUpdating(false)
       setIsEditDialogOpen(false)
       setAssignmentToEdit(null)
       setNewCommitmentDate(undefined)
+      setNewGraceDays(undefined)
     }
   }
 
@@ -554,9 +581,15 @@ export default function AsignarProcesosPage() {
         return format(date, "dd/MM/yyyy", { locale: es })
       },
     },
-    // Ahora, modifiquemos la columna de estado para mostrar el estado PAID
-    // Buscar la definición de la columna "status" y reemplazarla
-
+    // Añadir nueva columna para mostrar los días de gracia
+    {
+      accessorKey: "graceDays",
+      header: "Días de Gracia",
+      cell: ({ row }) => {
+        const graceDays = row.getValue("graceDays") as number
+        return graceDays !== undefined ? graceDays : "0"
+      },
+    },
     // Reemplazar la columna de estado existente con esta versión actualizada
     {
       accessorKey: "status",
@@ -718,12 +751,13 @@ export default function AsignarProcesosPage() {
           if (!open) {
             setAssignmentToEdit(null)
             setNewCommitmentDate(undefined)
+            setNewGraceDays(undefined)
           }
         }}
       >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Editar Fecha de Compromiso</DialogTitle>
+            <DialogTitle>Editar Proceso</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             {assignmentToEdit && (
@@ -772,6 +806,21 @@ export default function AsignarProcesosPage() {
                     </Popover>
                   </div>
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="graceDays" className="text-right">
+                    Días de Gracia:
+                  </Label>
+                  <div className="col-span-3">
+                    <Input
+                      id="graceDays"
+                      type="number"
+                      min="0"
+                      value={newGraceDays !== undefined ? newGraceDays : 0}
+                      onChange={(e) => setNewGraceDays(Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -782,6 +831,7 @@ export default function AsignarProcesosPage() {
                 setIsEditDialogOpen(false)
                 setAssignmentToEdit(null)
                 setNewCommitmentDate(undefined)
+                setNewGraceDays(undefined)
               }}
             >
               Cancelar
