@@ -1,5 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { format, isValid, parseISO } from "date-fns"
+import { format, isValid } from "date-fns"
 import { es } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -72,7 +72,14 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return "No disponible"
     try {
-      const date = parseISO(dateString)
+      // Extraer solo la fecha (YYYY-MM-DD) para evitar problemas de zona horaria
+      const dateParts = dateString.split("T")[0].split("-")
+      const year = Number.parseInt(dateParts[0])
+      const month = Number.parseInt(dateParts[1]) - 1 // Los meses en JS son 0-indexed
+      const day = Number.parseInt(dateParts[2])
+
+      const date = new Date(year, month, day)
+
       return isValid(date) ? format(date, "dd 'de' MMMM 'de' yyyy", { locale: es }) : "Fecha inválida"
     } catch (error) {
       return "Fecha inválida"
