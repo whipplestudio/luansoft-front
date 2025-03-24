@@ -105,6 +105,7 @@ export interface HistoryEntry {
 // Buscar la definición de ProcessAssignment y reemplazarla con esta versión actualizada
 
 // Con esta versión actualizada:
+// Actualizar la interfaz ProcessAssignment para incluir el campo paymentPeriod
 export interface ProcessAssignment {
   id: string
   clientId: string
@@ -114,6 +115,7 @@ export interface ProcessAssignment {
   status?: "ACTIVE" | "INACTIVE" | "PAID"
   graceDays?: number
   payrollFrequencies?: string[] // Añadir el campo payrollFrequencies
+  paymentPeriod?: "MONTHLY" | "ANNUAL" // Añadir el campo paymentPeriod
 }
 
 export interface Dashboard {

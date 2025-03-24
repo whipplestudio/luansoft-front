@@ -16,19 +16,35 @@ interface ClientDetailDialogProps {
 export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDialogProps) {
   if (!client) return null
 
-  // Encontrar la fecha de vencimiento más cercana
+  // Modificar la función getNearestDueDate para filtrar procesos no completados
   const getNearestDueDate = () => {
     if (!client.processes || client.processes.length === 0) {
       return client.dueDate
     }
 
-    // Filtrar procesos que tienen fecha de vencimiento
-    const processesWithDates = client.processes.filter((p) => p.dueDate)
+    // Filtrar procesos que tienen fecha de vencimiento y NO están completados
+    const processesWithDates = client.processes.filter(
+      (p) => p.dueDate && p.status !== "completed" && p.deliveryStatus !== "completed",
+    )
+
     if (processesWithDates.length === 0) {
-      return client.dueDate
+      // Si no hay procesos pendientes, buscar entre todos los procesos
+      const allProcessesWithDates = client.processes.filter((p) => p.dueDate)
+      if (allProcessesWithDates.length === 0) {
+        return client.dueDate
+      }
+
+      // Ordenar por fecha y tomar la más cercana
+      const sortedDates = [...allProcessesWithDates].sort((a, b) => {
+        const dateA = new Date(a.dueDate || "")
+        const dateB = new Date(b.dueDate || "")
+        return dateA.getTime() - dateB.getTime()
+      })
+
+      return sortedDates[0].dueDate
     }
 
-    // Ordenar por fecha y tomar la más cercana
+    // Ordenar por fecha y tomar la más cercana entre los no completados
     const sortedDates = [...processesWithDates].sort((a, b) => {
       const dateA = new Date(a.dueDate || "")
       const dateB = new Date(b.dueDate || "")

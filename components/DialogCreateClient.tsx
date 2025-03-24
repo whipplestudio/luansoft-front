@@ -11,8 +11,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import axiosInstance from "@/api/config"
-import { isAxiosError } from "axios"
 import { Loader2 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Check, ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 // Primero, actualizo el esquema de validación para incluir el regimenFiscalId
 const clientSchema = z.object({
@@ -50,6 +53,10 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
   const [isSubmitting, setIsSubmitting] = useState(false)
   // Añado el estado para almacenar los regímenes fiscales
   const [regimenesFiscales, setRegimenesFiscales] = useState<Array<{ id: string; nombre: string }>>([])
+  // Añadir un estado para controlar el popover
+
+  // Añadir este estado después de los otros estados en el componente
+  const [open, setOpen] = useState(false)
 
   const {
     control,
@@ -134,7 +141,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
         const changedFields = Object.keys(dirtyFields).reduce(
           (acc, key) => {
             if (key !== "password") {
-              acc[key as keyof ClientFormData] = data[key as keyof ClientFormData] as any
+              acc[key] = data[key]
             }
             return acc
           },
@@ -164,18 +171,14 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       }
     } catch (error) {
       console.error("Error:", error)
-      if (isAxiosError(error)) {
-        if (error.response) {
-          const { status, data } = error.response
-          if (status === 404) {
-            toast.error("Cliente no encontrado")
-          } else if (status === 409) {
-            toast.error("El correo electrónico ya está registrado")
-          } else {
-            toast.error(data.message || "Error al procesar la solicitud")
-          }
+      if (error.response) {
+        const { status, data } = error.response
+        if (status === 404) {
+          toast.error("Cliente no encontrado")
+        } else if (status === 409) {
+          toast.error("El correo electrónico ya está registrado")
         } else {
-          toast.error("Error de conexión. Por favor, intente nuevamente")
+          toast.error(data.message || "Error al procesar la solicitud")
         }
       } else {
         toast.error("Error de conexión. Por favor, intente nuevamente")
@@ -245,24 +248,49 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
             {errors.type && <p className="text-red-500 text-sm">{errors.type.message}</p>}
           </div>
           {/* Añado el select de régimen fiscal al formulario, justo antes del campo de contraseña */}
+          {/* Reemplazar el Select de régimen fiscal actual con este componente con buscador */}
           <div>
             <Label htmlFor="regimenFiscalId">Régimen Fiscal</Label>
             <Controller
               name="regimenFiscalId"
               control={control}
               render={({ field }) => (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar régimen fiscal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {regimenesFiscales.map((regimen) => (
-                      <SelectItem key={regimen.id} value={regimen.id}>
-                        {regimen.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+                      {field.value
+                        ? regimenesFiscales.find((regimen) => regimen.id === field.value)?.nombre ||
+                          "Seleccionar régimen fiscal"
+                        : "Seleccionar régimen fiscal"}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0 max-h-[300px] overflow-hidden">
+                    <Command className="h-full">
+                      <CommandInput placeholder="Buscar régimen fiscal..." />
+                      <CommandList className="max-h-[calc(300px-40px)] overflow-y-auto">
+                        <CommandEmpty>No se encontraron regímenes fiscales.</CommandEmpty>
+                        <CommandGroup>
+                          {regimenesFiscales.map((regimen) => (
+                            <CommandItem
+                              key={regimen.id}
+                              value={regimen.id}
+                              onSelect={() => {
+                                field.onChange(regimen.id)
+                                setOpen(false)
+                              }}
+                            >
+                              <Check
+                                className={cn("mr-2 h-4 w-4", field.value === regimen.id ? "opacity-100" : "opacity-0")}
+                              />
+                              {regimen.nombre}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               )}
             />
             {errors.regimenFiscalId && <p className="text-red-500 text-sm">{errors.regimenFiscalId.message}</p>}

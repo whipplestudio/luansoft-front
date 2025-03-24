@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   ArrowUpDown,
   Filter,
@@ -37,7 +37,7 @@ import { axiosInstance } from "@/lib/axios"
 import { toast } from "sonner"
 import { debounce } from "lodash"
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_PAGE = 100
 
 // Tipo para los datos de cliente que vienen de la API
 interface ApiClient {
@@ -277,6 +277,7 @@ export default function DashboardPage() {
       })
 
       if (response.data.success) {
+        // Actualizar para acceder a la nueva estructura anidada
         setDashboardData(response.data.data.data)
       } else {
         throw new Error(response.data.message || "Error fetching dashboard data")
@@ -473,33 +474,18 @@ export default function DashboardPage() {
   const FilterContent = () => {
     // Estado local para el valor del input de empresa
     const [companyNameInput, setCompanyNameInput] = useState(filters.companyName)
-    // Ref para almacenar el timeout
-    const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     // Manejar cambio en el input de empresa con debounce
     const handleCompanyNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value
       setCompanyNameInput(value)
 
-      // Limpiar el timeout anterior si existe
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-
-      // Configurar un nuevo timeout
-      timeoutRef.current = setTimeout(() => {
+      // Usar debounce para la llamada al backend
+      clearTimeout((window as any).companyFilterTimeout)
+      ;(window as any).companyFilterTimeout = setTimeout(() => {
         handleFilter("companyName", value)
       }, 500)
     }
-
-    // Limpiar el timeout cuando el componente se desmonta
-    useEffect(() => {
-      return () => {
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current)
-        }
-      }
-    }, [])
 
     // Actualizar el input local cuando cambia el filtro global
     useEffect(() => {
@@ -668,31 +654,40 @@ export default function DashboardPage() {
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : dashboardData ? (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Actualizar para usar las nuevas claves de estado */}
                 {[
                   {
-                    status: "green",
+                    status: "completed",
+                    label: "Completados",
+                    bgColor: "bg-blue-100",
+                    textColor: "text-blue-800",
+                    count: dashboardData.summary.processes.byStatus.completed.count,
+                    percentage: dashboardData.summary.processes.byStatus.completed.percentage,
+                  },
+                  {
+                    status: "onTime",
                     label: "En tiempo",
                     bgColor: "bg-green-100",
                     textColor: "text-green-800",
-                    count: dashboardData.summary.processes.byStatus.green.count,
-                    percentage: dashboardData.summary.processes.byStatus.green.percentage,
+                    count: dashboardData.summary.processes.byStatus.onTime.count,
+                    percentage: dashboardData.summary.processes.byStatus.onTime.percentage,
                   },
                   {
-                    status: "yellow",
+                    status: "atRisk",
                     label: "En riesgo",
                     bgColor: "bg-yellow-100",
                     textColor: "text-yellow-800",
-                    count: dashboardData.summary.processes.byStatus.yellow.count,
-                    percentage: dashboardData.summary.processes.byStatus.yellow.percentage,
+                    count: dashboardData.summary.processes.byStatus.atRisk.count,
+                    percentage: dashboardData.summary.processes.byStatus.atRisk.percentage,
                   },
                   {
-                    status: "red",
+                    status: "delayed",
                     label: "Atrasados",
                     bgColor: "bg-red-100",
                     textColor: "text-red-800",
-                    count: dashboardData.summary.processes.byStatus.red.count,
-                    percentage: dashboardData.summary.processes.byStatus.red.percentage,
+                    count: dashboardData.summary.processes.byStatus.delayed.count,
+                    percentage: dashboardData.summary.processes.byStatus.delayed.percentage,
                   },
                 ].map(({ status, label, bgColor, textColor, count, percentage }) => (
                   <div key={status} className={`p-4 rounded-lg ${bgColor} ${textColor}`}>
@@ -701,6 +696,77 @@ export default function DashboardPage() {
                     <p className="text-sm mt-1">({percentage}% del total)</p>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">No hay datos disponibles</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
+        {/* Tarjeta de Clientes */}
+        <Card className="col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Clientes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex justify-center items-center h-24">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : dashboardData ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-3 rounded-lg bg-purple-100 text-purple-800">
+                    <h3 className="text-sm font-semibold mb-1">Total</h3>
+                    <p className="text-2xl font-bold">{dashboardData.summary.clients.total}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-teal-100 text-teal-800">
+                    <h3 className="text-sm font-semibold mb-1">Activos</h3>
+                    <p className="text-2xl font-bold">{dashboardData.summary.clients.active}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-gray-100 text-gray-800">
+                    <h3 className="text-sm font-semibold mb-1">Inactivos</h3>
+                    <p className="text-2xl font-bold">{dashboardData.summary.clients.inactive}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">No hay datos disponibles</div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tarjeta de Contadores */}
+        <Card className="col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Contadores</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex justify-center items-center h-24">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : dashboardData ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-3 rounded-lg bg-indigo-100 text-indigo-800">
+                    <h3 className="text-sm font-semibold mb-1">Total</h3>
+                    <p className="text-2xl font-bold">{dashboardData.summary.contadores.total}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-100 text-emerald-800">
+                    <h3 className="text-sm font-semibold mb-1">Activos</h3>
+                    <p className="text-2xl font-bold">{dashboardData.summary.contadores.active}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-100 text-slate-800">
+                    <h3 className="text-sm font-semibold mb-1">Inactivos</h3>
+                    <p className="text-2xl font-bold">{dashboardData.summary.contadores.inactive}</p>
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg bg-cyan-100 text-cyan-800">
+                  <h3 className="text-sm font-semibold mb-1">Promedio de clientes por contador</h3>
+                  <p className="text-2xl font-bold">{dashboardData.summary.contadores.averageClientsPerContador}</p>
+                </div>
               </div>
             ) : (
               <div className="text-center text-gray-500">No hay datos disponibles</div>

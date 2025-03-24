@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const baseURL =
-  process.env.NEXT_PUBLIC_API_URL || "https://eb06-2806-269-481-1b11-1825-75f-c800-8c74.ngrok-free.app/api"
+  process.env.NEXT_PUBLIC_API_URL || "https://backend.lab.tupla.dev/api"
 
 const axiosInstance = axios.create({
   baseURL,

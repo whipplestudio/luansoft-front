@@ -27,11 +27,14 @@ import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function AsignarProcesosPage() {
   const [assignments, setAssignments] = useState<ProcessAssignment[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<string | null>(null)
+  const [selectedProcess, setSelectedProcess] = useState<string | null>(null) // Nuevo estado para el proceso seleccionado
   const [isLoading, setIsLoading] = useState(true)
   const [clients, setClients] = useState<Client[]>([])
   const [allActiveClients, setAllActiveClients] = useState<Client[]>([])
@@ -55,6 +58,12 @@ export default function AsignarProcesosPage() {
   // Añadir un nuevo estado para los días de gracia después de la declaración del estado newCommitmentDate
   const [newGraceDays, setNewGraceDays] = useState<number | undefined>(undefined)
   const [isUpdating, setIsUpdating] = useState(false)
+
+  // Primero, añadamos un nuevo estado para las frecuencias de nómina
+  const [newPayrollFrequencies, setNewPayrollFrequencies] = useState<string[]>([])
+
+  // Añadir un nuevo estado para el período de pago
+  const [newPaymentPeriod, setNewPaymentPeriod] = useState<"MONTHLY" | "ANNUAL">("MONTHLY")
 
   // Función para obtener todos los clientes activos para el select
   const fetchActiveClients = useCallback(async () => {
@@ -125,8 +134,10 @@ export default function AsignarProcesosPage() {
     }
   }, [])
 
-  // Función para obtener clientes con sus procesos asignados
-  const fetchClientsWithProcesses = useCallback(async (page = 1, limit = 10, clientId?: string) => {
+  // Modificar la función fetchClientsWithProcesses para adaptarla a la nueva estructura de respuesta de la API
+  // Reemplazar la implementación actual de fetchClientsWithProcesses con esta nueva versión:
+
+  const fetchClientsWithProcesses = useCallback(async (page = 1, limit = 10, clientId?: string, processId?: string) => {
     setIsLoading(true)
     try {
       const token = localStorage.getItem("accessToken")
@@ -145,6 +156,11 @@ export default function AsignarProcesosPage() {
         params.clientId = clientId
       }
 
+      // Añadir processId a los parámetros si está definido
+      if (processId) {
+        params.processId = processId
+      }
+
       const response = await axiosInstance.get("/client/with-processes", {
         params,
         headers: {
@@ -155,49 +171,49 @@ export default function AsignarProcesosPage() {
       if (response.data.success) {
         const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
 
-        // Mapear los clientes
-        const clientsData = data.map((client: any) => ({
-          id: client.id,
-          name: `${client.firstName} ${client.lastName}`,
-          firstName: client.firstName,
-          lastName: client.lastName,
-          company: client.company,
-          email: client.email,
-          type: client.type,
-          assignedTo: client.contadorId,
-          status: client.status,
-          processes: [],
-          razonSocial: client.company,
-          lastAssignedDate: client.updatedAt,
-        }))
+        // Extraer los clientes únicos de las asignaciones
+        const uniqueClients = new Map<string, Client>()
 
-        // Mapear las asignaciones de procesos
-        const assignmentsData: ProcessAssignment[] = []
-        data.forEach((client: any) => {
-          if (client.commitmentDates && client.commitmentDates.length > 0) {
-            client.commitmentDates.forEach((commitment: any) => {
-              assignmentsData.push({
-                id: commitment.id,
-                clientId: client.id,
-                processId: commitment.processId,
-                commitmentDate: commitment.date, // Usar el campo date de la API
-                status: commitment.status,
-                graceDays: commitment.graceDays, // Añadir el campo graceDays
-                payrollFrequencies: commitment.payrollFrequencies || [], // Añadir el campo payrollFrequencies
-                process: {
-                  id: commitment.process.id,
-                  name: commitment.process.name,
-                  description: commitment.process.description,
-                  progress: 0,
-                  createdAt: commitment.process.createdAt,
-                  updatedAt: commitment.process.updatedAt,
-                },
-              })
+        data.forEach((assignment: any) => {
+          if (assignment.client && !uniqueClients.has(assignment.client.id)) {
+            uniqueClients.set(assignment.client.id, {
+              id: assignment.client.id,
+              name: `${assignment.client.firstName} ${assignment.client.lastName}`,
+              firstName: assignment.client.firstName,
+              lastName: assignment.lastName,
+              company: assignment.client.company,
+              email: assignment.client.email,
+              type: assignment.client.type,
+              assignedTo: assignment.client.contadorId,
+              status: assignment.client.status,
+              processes: [],
+              razonSocial: assignment.client.company,
+              lastAssignedDate: assignment.client.updatedAt,
             })
           }
         })
 
-        setClients(clientsData)
+        // Mapear las asignaciones de procesos directamente desde la respuesta
+        const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
+          id: assignment.id,
+          clientId: assignment.clientId,
+          processId: assignment.processId,
+          commitmentDate: assignment.date,
+          status: assignment.status,
+          graceDays: assignment.graceDays,
+          payrollFrequencies: assignment.payrollFrequencies || [],
+          paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
+          process: {
+            id: assignment.process.id,
+            name: assignment.process.name,
+            description: assignment.process.description,
+            progress: 0,
+            createdAt: assignment.process.createdAt,
+            updatedAt: assignment.process.updatedAt,
+          },
+        }))
+
+        setClients(Array.from(uniqueClients.values()))
         setAssignments(assignmentsData)
         setPagination({
           page: currentPage || 1,
@@ -221,16 +237,31 @@ export default function AsignarProcesosPage() {
       await Promise.all([
         fetchActiveClients(),
         fetchProcesses(),
-        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient),
+        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess),
       ])
     }
 
     loadData()
-  }, [fetchActiveClients, fetchProcesses, fetchClientsWithProcesses, pagination.page, pagination.limit, selectedClient])
+  }, [
+    fetchActiveClients,
+    fetchProcesses,
+    fetchClientsWithProcesses,
+    pagination.page,
+    pagination.limit,
+    selectedClient,
+    selectedProcess,
+  ])
 
   // Manejar cambio de cliente seleccionado
   const handleClientChange = (clientId: string | null) => {
     setSelectedClient(clientId)
+    // Resetear a la página 1 cuando se cambia el filtro
+    setPagination((prev) => ({ ...prev, page: 1 }))
+  }
+
+  // Manejar cambio de proceso seleccionado
+  const handleProcessChange = (processId: string | null) => {
+    setSelectedProcess(processId)
     // Resetear a la página 1 cuando se cambia el filtro
     setPagination((prev) => ({ ...prev, page: 1 }))
   }
@@ -252,6 +283,7 @@ export default function AsignarProcesosPage() {
     commitmentDate?: string
     graceDays?: number
     payrollFrequencies?: string[]
+    paymentPeriod?: "MONTHLY" | "ANNUAL"
   }) => {
     try {
       const token = localStorage.getItem("accessToken")
@@ -274,6 +306,7 @@ export default function AsignarProcesosPage() {
             processId: assignment.processId,
             date: assignment.commitmentDate?.split("T")[0], // Formato YYYY-MM-DD
             graceDays: assignment.graceDays,
+            paymentPeriod: assignment.paymentPeriod, // Incluir el período de pago
           }
 
       // Llamar a la API para asignar el proceso
@@ -326,7 +359,7 @@ export default function AsignarProcesosPage() {
         setIsDialogOpen(false)
 
         // Recargar los datos para asegurar que todo está sincronizado
-        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient)
+        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
       } else {
         throw new Error(response.data.message || "Error al asignar el proceso")
       }
@@ -337,28 +370,42 @@ export default function AsignarProcesosPage() {
   }
 
   // Función para abrir el diálogo de edición
+  // Luego, modifiquemos la función handleEdit para detectar si es un proceso de nómina y establecer las frecuencias
   const handleEdit = (assignment: ProcessAssignment) => {
     setAssignmentToEdit(assignment)
 
-    // Extraer la fecha de la cadena ISO
-    if (assignment.commitmentDate) {
-      const dateParts = assignment.commitmentDate.split("T")[0].split("-")
-      const year = Number.parseInt(dateParts[0])
-      const month = Number.parseInt(dateParts[1]) - 1 // Los meses en JavaScript son 0-indexados
-      const day = Number.parseInt(dateParts[2])
+    // Verificar si es un proceso de nómina (exactamente "nómina" o "nomina")
+    const processName = assignment.process.name.toLowerCase().trim()
+    const isPayroll = processName === "nómina" || processName === "nomina"
 
-      setNewCommitmentDate(new Date(year, month, day))
+    if (isPayroll) {
+      // Si es nómina, establecer las frecuencias
+      setNewPayrollFrequencies(assignment.payrollFrequencies || [])
+    } else {
+      // Si no es nómina, establecer la fecha de compromiso
+      if (assignment.commitmentDate) {
+        const dateParts = assignment.commitmentDate.split("T")[0].split("-")
+        const year = Number.parseInt(dateParts[0])
+        const month = Number.parseInt(dateParts[1]) - 1 // Los meses en JavaScript son 0-indexados
+        const day = Number.parseInt(dateParts[2])
+
+        setNewCommitmentDate(new Date(year, month, day))
+      }
+
+      // Establecer los días de gracia
+      setNewGraceDays(assignment.graceDays || 0)
+
+      // Establecer el período de pago desde la asignación
+      setNewPaymentPeriod(assignment.paymentPeriod || "MONTHLY")
     }
-
-    // Establecer los días de gracia
-    setNewGraceDays(assignment.graceDays || 0)
 
     setIsEditDialogOpen(true)
   }
 
   // Modificar la función handleUpdateCommitmentDate para incluir los días de gracia
+  // Ahora, modifiquemos la función handleUpdateCommitmentDate para manejar ambos casos
   const handleUpdateCommitmentDate = async () => {
-    if (!assignmentToEdit || !newCommitmentDate) return
+    if (!assignmentToEdit) return
 
     setIsUpdating(true)
     try {
@@ -367,16 +414,30 @@ export default function AsignarProcesosPage() {
         throw new Error("No authentication token found")
       }
 
-      // Formatear la fecha como YYYY-MM-DD
-      const formattedDate = format(newCommitmentDate, "yyyy-MM-dd")
+      // Verificar si es un proceso de nómina (exactamente "nómina" o "nomina")
+      const processName = assignmentToEdit.process.name.toLowerCase().trim()
+      const isPayroll = processName === "nómina" || processName === "nomina"
 
-      // Llamar a la API para actualizar la fecha de compromiso y los días de gracia
-      const response = await axiosInstance.patch(
-        `/process/assign/${assignmentToEdit.clientId}/${assignmentToEdit.processId}`,
-        {
+      // Preparar los datos según el tipo de proceso
+      let requestData
+      if (isPayroll) {
+        requestData = {
+          payrollFrequencies: newPayrollFrequencies,
+        }
+      } else {
+        // Formatear la fecha como YYYY-MM-DD
+        const formattedDate = newCommitmentDate ? format(newCommitmentDate, "yyyy-MM-dd") : undefined
+        requestData = {
           date: formattedDate,
           graceDays: newGraceDays, // Incluir los días de gracia en la solicitud
-        },
+          paymentPeriod: newPaymentPeriod, // Incluir el período de pago
+        }
+      }
+
+      // Llamar a la API para actualizar el proceso
+      const response = await axiosInstance.patch(
+        `/process/assign/${assignmentToEdit.clientId}/${assignmentToEdit.processId}`,
+        requestData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -392,6 +453,7 @@ export default function AsignarProcesosPage() {
                 ...a,
                 commitmentDate: response.data.data.date,
                 graceDays: response.data.data.graceDays,
+                payrollFrequencies: response.data.data.payrollFrequencies,
               }
             : a,
         )
@@ -400,7 +462,7 @@ export default function AsignarProcesosPage() {
         toast.success("Proceso actualizado exitosamente")
 
         // Recargar los datos para asegurar que todo está sincronizado
-        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient)
+        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
       } else {
         throw new Error(response.data.message || "Error al actualizar el proceso")
       }
@@ -413,10 +475,12 @@ export default function AsignarProcesosPage() {
       setAssignmentToEdit(null)
       setNewCommitmentDate(undefined)
       setNewGraceDays(undefined)
+      setNewPayrollFrequencies([])
+      setNewPaymentPeriod("MONTHLY")
     }
   }
 
-  // Reemplazar la función handleDelete existente con esta nueva implementación
+  // Reemplazar la función handleDelete existente with this new implementation
   const handleDelete = (assignment: ProcessAssignment) => {
     setAssignmentToDelete(assignment)
     setIsConfirmDialogOpen(true)
@@ -449,7 +513,7 @@ export default function AsignarProcesosPage() {
         toast.success("Asignación eliminada exitosamente")
 
         // Recargar los datos para asegurar que todo está sincronizado
-        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient)
+        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
       } else {
         throw new Error(response.data.message || "Error al eliminar la asignación")
       }
@@ -488,7 +552,7 @@ export default function AsignarProcesosPage() {
         toast.success("Proceso activado exitosamente")
 
         // Recargar los datos para asegurar que todo está sincronizado
-        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient)
+        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
       } else {
         throw new Error(response.data.message || "Error al activar el proceso")
       }
@@ -529,7 +593,7 @@ export default function AsignarProcesosPage() {
         toast.success("Proceso marcado como pagado exitosamente")
 
         // Recargar los datos para asegurar que todo está sincronizado
-        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient)
+        fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
       } else {
         throw new Error(response.data.message || "Error al marcar el proceso como pagado")
       }
@@ -567,21 +631,6 @@ export default function AsignarProcesosPage() {
       accessorKey: "commitmentDate",
       header: "Fecha de Compromiso",
       cell: ({ row }) => {
-        const assignment = row.original
-
-        // Verificar si tiene frecuencias de nómina
-        if (assignment.payrollFrequencies && assignment.payrollFrequencies.length > 0) {
-          const frequencies = assignment.payrollFrequencies.map((freq) =>
-            freq === "QUINCENAL" ? "Quincenal" : "Semanal",
-          )
-          return (
-            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
-              {frequencies.join(" y ")}
-            </Badge>
-          )
-        }
-
-        // Si no tiene fecha de compromiso
         const dateString = row.getValue("commitmentDate") as string
         if (!dateString) return "No disponible"
 
@@ -597,6 +646,26 @@ export default function AsignarProcesosPage() {
         return format(date, "dd/MM/yyyy", { locale: es })
       },
     },
+    {
+      accessorKey: "payrollFrequencies",
+      header: "Frecuencia de Nómina",
+      cell: ({ row }) => {
+        const assignment = row.original
+        const frequencies = assignment.payrollFrequencies || []
+
+        if (frequencies.length === 0) {
+          return "-"
+        }
+
+        const formattedFrequencies = frequencies.map((freq) => (freq === "QUINCENAL" ? "Quincenal" : "Semanal"))
+
+        return (
+          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+            {formattedFrequencies.join(" y ")}
+          </Badge>
+        )
+      },
+    },
     // Añadir nueva columna para mostrar los días de gracia
     {
       accessorKey: "graceDays",
@@ -604,6 +673,25 @@ export default function AsignarProcesosPage() {
       cell: ({ row }) => {
         const graceDays = row.getValue("graceDays") as number
         return graceDays !== undefined ? graceDays : "0"
+      },
+    },
+    // Añadir una columna para mostrar el período de pago en la tabla
+    // Buscar la definición de columns y añadir una nueva columna después de graceDays
+
+    // Añadir nueva columna para mostrar el período de pago
+    {
+      accessorKey: "paymentPeriod",
+      header: "Período de Pago",
+      cell: ({ row }) => {
+        const assignment = row.original
+
+        // Si es un proceso de nómina, no mostrar período de pago
+        if (assignment.payrollFrequencies && assignment.payrollFrequencies.length > 0) {
+          return "-"
+        }
+
+        const paymentPeriod = row.getValue("paymentPeriod") as string
+        return paymentPeriod === "MONTHLY" ? "Mensual" : "Anual"
       },
     },
     // Reemplazar la columna de estado existente con esta versión actualizada
@@ -631,7 +719,7 @@ export default function AsignarProcesosPage() {
     // Finalmente, modifiquemos el menú de acciones para incluir la opción "Completar"
     // Buscar la definición de la columna "actions" y reemplazarla
 
-    // Reemplazar la columna de acciones existente con esta versión actualizada
+    // Reemplazar la columna de acciones existente with this versión actualizada
     {
       id: "actions",
       cell: ({ row }) => {
@@ -694,46 +782,87 @@ export default function AsignarProcesosPage() {
         </Button>
       </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium mb-2">Filtrar por Cliente</label>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="w-full md:w-[300px] justify-between">
-              {selectedClient
-                ? allActiveClients.find((c) => c.id === selectedClient)?.company || "Cliente seleccionado"
-                : "Todos los clientes"}
-              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[300px] p-0">
-            <Command>
-              <CommandInput placeholder="Buscar cliente..." />
-              <CommandList>
-                <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                <CommandGroup>
-                  <CommandItem onSelect={() => handleClientChange(null)} className="cursor-pointer">
-                    Todos los clientes
-                  </CommandItem>
-                  {allActiveClients.map((client) => (
-                    <CommandItem
-                      key={client.id}
-                      onSelect={() => handleClientChange(client.id)}
-                      className="cursor-pointer"
-                    >
-                      {client.company}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Filtro por Cliente */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Filtrar por Cliente</label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                {selectedClient
+                  ? allActiveClients.find((c) => c.id === selectedClient)?.company || "Cliente seleccionado"
+                  : "Todos los clientes"}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-0">
+              <Command>
+                <CommandInput placeholder="Buscar cliente..." />
+                <CommandList className="max-h-[300px] overflow-y-auto">
+                  <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem onSelect={() => handleClientChange(null)} className="cursor-pointer">
+                      Todos los clientes
                     </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+                    {allActiveClients.map((client) => (
+                      <CommandItem
+                        key={client.id}
+                        onSelect={() => handleClientChange(client.id)}
+                        className="cursor-pointer"
+                      >
+                        {client.company}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Filtro por Proceso */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Filtrar por Proceso</label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                {selectedProcess
+                  ? processes.find((p) => p.id === selectedProcess)?.name || "Proceso seleccionado"
+                  : "Todos los procesos"}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-0">
+              <Command>
+                <CommandInput placeholder="Buscar proceso..." />
+                <CommandList className="max-h-[300px] overflow-y-auto">
+                  <CommandEmpty>No se encontraron procesos.</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem onSelect={() => handleProcessChange(null)} className="cursor-pointer">
+                      Todos los procesos
+                    </CommandItem>
+                    {processes.map((process) => (
+                      <CommandItem
+                        key={process.id}
+                        onSelect={() => handleProcessChange(process.id)}
+                        className="cursor-pointer"
+                      >
+                        {process.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       <DataTable
         columns={columns}
         data={assignments}
         isLoading={isLoading}
+        hideSearchInput={true}
         pagination={{
           pageCount: pagination.totalPages,
           page: pagination.page,
@@ -768,6 +897,8 @@ export default function AsignarProcesosPage() {
             setAssignmentToEdit(null)
             setNewCommitmentDate(undefined)
             setNewGraceDays(undefined)
+            setNewPayrollFrequencies([])
+            setNewPaymentPeriod("MONTHLY")
           }
         }}
       >
@@ -788,55 +919,117 @@ export default function AsignarProcesosPage() {
                   <Label className="text-right">Proceso:</Label>
                   <div className="col-span-3">{assignmentToEdit.process.name}</div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="commitmentDate" className="text-right">
-                    Fecha de Compromiso:
-                  </Label>
-                  <div className="col-span-3">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-start text-left font-normal",
-                            !newCommitmentDate && "text-muted-foreground",
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newCommitmentDate ? (
-                            format(newCommitmentDate, "PPP", { locale: es })
-                          ) : (
-                            <span>Selecciona una fecha</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={newCommitmentDate}
-                          onSelect={setNewCommitmentDate}
-                          initialFocus
-                          locale={es}
+
+                {/* Verificar si es un proceso de nómina */}
+                {assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
+                assignmentToEdit?.process.name.toLowerCase().trim() === "nomina" ? (
+                  // Mostrar opciones de frecuencia para procesos de nómina
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Frecuencia:</Label>
+                    <div className="col-span-3 space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="quincenal"
+                          checked={newPayrollFrequencies.includes("QUINCENAL")}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setNewPayrollFrequencies((prev) => [...prev, "QUINCENAL"])
+                            } else {
+                              setNewPayrollFrequencies((prev) => prev.filter((f) => f !== "QUINCENAL"))
+                            }
+                          }}
                         />
-                      </PopoverContent>
-                    </Popover>
+                        <Label htmlFor="quincenal">Quincenal</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="semanal"
+                          checked={newPayrollFrequencies.includes("SEMANAL")}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setNewPayrollFrequencies((prev) => [...prev, "SEMANAL"])
+                            } else {
+                              setNewPayrollFrequencies((prev) => prev.filter((f) => f !== "SEMANAL"))
+                            }
+                          }}
+                        />
+                        <Label htmlFor="semanal">Semanal</Label>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="graceDays" className="text-right">
-                    Días de Gracia:
-                  </Label>
-                  <div className="col-span-3">
-                    <Input
-                      id="graceDays"
-                      type="number"
-                      min="0"
-                      value={newGraceDays !== undefined ? newGraceDays : 0}
-                      onChange={(e) => setNewGraceDays(Number(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  // Mostrar campos de fecha y días de gracia para otros procesos
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="commitmentDate" className="text-right">
+                        Fecha de Compromiso:
+                      </Label>
+                      <div className="col-span-3">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !newCommitmentDate && "text-muted-foreground",
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {newCommitmentDate ? (
+                                format(newCommitmentDate, "PPP", { locale: es })
+                              ) : (
+                                <span>Selecciona una fecha</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={newCommitmentDate}
+                              onSelect={setNewCommitmentDate}
+                              initialFocus
+                              locale={es}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="graceDays" className="text-right">
+                        Días de Gracia:
+                      </Label>
+                      <div className="col-span-3">
+                        <Input
+                          id="graceDays"
+                          type="number"
+                          min="0"
+                          value={newGraceDays !== undefined ? newGraceDays : 0}
+                          onChange={(e) => setNewGraceDays(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="paymentPeriod" className="text-right">
+                        Período de Pago:
+                      </Label>
+                      <div className="col-span-3">
+                        <Select
+                          value={newPaymentPeriod}
+                          onValueChange={(value: "MONTHLY" | "ANNUAL") => setNewPaymentPeriod(value)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Seleccionar período" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MONTHLY">Mensual</SelectItem>
+                            <SelectItem value="ANNUAL">Anual</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -848,11 +1041,22 @@ export default function AsignarProcesosPage() {
                 setAssignmentToEdit(null)
                 setNewCommitmentDate(undefined)
                 setNewGraceDays(undefined)
+                setNewPayrollFrequencies([])
+                setNewPaymentPeriod("MONTHLY")
               }}
             >
               Cancelar
             </Button>
-            <Button onClick={handleUpdateCommitmentDate} disabled={isUpdating || !newCommitmentDate}>
+            <Button
+              onClick={handleUpdateCommitmentDate}
+              disabled={
+                isUpdating ||
+                (assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
+                assignmentToEdit?.process.name.toLowerCase().trim() === "nomina"
+                  ? newPayrollFrequencies.length === 0
+                  : !newCommitmentDate)
+              }
+            >
               {isUpdating ? "Actualizando..." : "Actualizar"}
             </Button>
           </DialogFooter>

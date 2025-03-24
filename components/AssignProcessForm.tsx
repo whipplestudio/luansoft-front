@@ -18,7 +18,9 @@ import { ChevronDown } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+// Primero, actualizar la interfaz AssignProcessFormData para incluir el nuevo campo paymentPeriod
 const assignProcessSchema = z.object({
   clientId: z.string().min(1, "El cliente es requerido"),
   processId: z.string().min(1, "El proceso es requerido"),
@@ -29,6 +31,7 @@ const assignProcessSchema = z.object({
     .optional(),
   graceDays: z.number().min(0, "Los días de gracia no pueden ser negativos").default(0).optional(),
   payrollFrequencies: z.array(z.enum(["QUINCENAL", "SEMANAL"])).optional(),
+  paymentPeriod: z.enum(["MONTHLY", "ANNUAL"]).optional(),
 })
 
 type AssignProcessFormData = z.infer<typeof assignProcessSchema>
@@ -103,7 +106,7 @@ export function AssignProcessForm({
     }
   }, [watch("processId"), processes, setValue])
 
-  // Modificar la función onSubmit para formatear correctamente la fecha
+  // Actualizar la función onSubmit para incluir el paymentPeriod en los datos enviados
   const onSubmit = async (data: AssignProcessFormData) => {
     setIsSubmitting(true)
 
@@ -118,12 +121,13 @@ export function AssignProcessForm({
           payrollFrequencies: data.payrollFrequencies,
         }
       } else {
-        // Datos para otros procesos
+        // Datos para otros procesos, ahora incluyendo paymentPeriod
         submissionData = {
           clientId: data.clientId,
           processId: data.processId,
           commitmentDate: data.commitmentDate ? format(data.commitmentDate, "yyyy-MM-dd") : undefined,
           graceDays: data.graceDays,
+          paymentPeriod: data.paymentPeriod,
         }
       }
 
@@ -161,7 +165,7 @@ export function AssignProcessForm({
               <PopoverContent className="w-[300px] p-0">
                 <Command>
                   <CommandInput placeholder="Buscar cliente..." />
-                  <CommandList>
+                  <CommandList className="max-h-[300px] overflow-y-auto">
                     <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                     <CommandGroup>
                       {clients.map((client) => (
@@ -212,7 +216,7 @@ export function AssignProcessForm({
               <PopoverContent className="w-[300px] p-0">
                 <Command>
                   <CommandInput placeholder="Buscar proceso..." />
-                  <CommandList>
+                  <CommandList className="max-h-[300px] overflow-y-auto">
                     <CommandEmpty>No se encontraron procesos.</CommandEmpty>
                     <CommandGroup>
                       {availableProcesses.map((process) => {
@@ -348,6 +352,27 @@ export function AssignProcessForm({
               )}
             />
             {errors.graceDays && <p className="text-red-500 text-sm">{errors.graceDays.message}</p>}
+          </div>
+
+          <div>
+            <Label htmlFor="paymentPeriod">Período de Pago</Label>
+            <Controller
+              name="paymentPeriod"
+              control={control}
+              defaultValue="MONTHLY"
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MONTHLY">Mensual</SelectItem>
+                    <SelectItem value="ANNUAL">Anual</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.paymentPeriod && <p className="text-red-500 text-sm">{errors.paymentPeriod.message}</p>}
           </div>
         </>
       )}

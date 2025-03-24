@@ -45,6 +45,7 @@ interface DataTableProps<TData, TValue> {
   searchValue?: string
   onSearchChange?: (value: string) => void
   searchPlaceholder?: string
+  hideSearchInput?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -57,6 +58,7 @@ export function DataTable<TData, TValue>({
   searchValue = "",
   onSearchChange,
   searchPlaceholder,
+  hideSearchInput = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -107,12 +109,14 @@ export function DataTable<TData, TValue>({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex flex-1 items-center space-x-2">
-          <Input
-            placeholder={searchPlaceholder || "Filtrar..."}
-            value={searchValue}
-            onChange={(event) => onSearchChange && onSearchChange(event.target.value)}
-            className="max-w-sm text-sm h-8"
-          />
+          {!hideSearchInput && (
+            <Input
+              placeholder={searchPlaceholder || "Filtrar..."}
+              value={searchValue}
+              onChange={(event) => onSearchChange && onSearchChange(event.target.value)}
+              className="max-w-sm text-sm h-8"
+            />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="ml-auto text-sm h-8">

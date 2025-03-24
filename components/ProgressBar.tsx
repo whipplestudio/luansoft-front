@@ -19,8 +19,11 @@ export function ProgressBar({ percentage }: ProgressBarProps) {
         <TooltipTrigger asChild>
           <div className="w-full">
             <div className="flex items-center">
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mr-2">
-                <div className={`h-2.5 rounded-full ${barColor}`} style={{ width: `${percentage}%` }} />
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mr-2 overflow-hidden">
+                <div
+                  className={`h-2.5 rounded-full ${barColor}`}
+                  style={{ width: `${percentage}%`, maxWidth: "100%" }}
+                />
               </div>
               <span className="text-sm font-medium whitespace-nowrap">{percentage}%</span>
             </div>
