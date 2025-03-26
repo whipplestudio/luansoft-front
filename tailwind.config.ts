@@ -17,6 +17,9 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-jost)", "sans-serif"],
+      },
       colors: {
         // Custom color palette
         "primary-green": "#006341", // Pantone 3425 C

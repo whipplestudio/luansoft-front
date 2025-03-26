@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Geist } from "next/font/google"
+import { Jost } from "next/font/google"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Header } from "@/components/Header"
@@ -11,8 +11,12 @@ import type { User } from "@/types"
 import { usePathname, useRouter } from "next/navigation"
 import type React from "react" // Added import for React
 
-const geist = Geist({
+// Load Jost font with all the weights we need
+const jost = Jost({
   subsets: ["latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  display: "swap",
+  variable: "--font-jost",
 })
 
 export default function ClientLayout({
@@ -61,7 +65,7 @@ export default function ClientLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </head>
-      <body className={geist.className}>
+      <body className={`${jost.className} ${jost.variable}`}>
         {isAuthenticated || pathname === "/login" ? (
           <>
             {isAuthenticated && pathname !== "/login" ? (

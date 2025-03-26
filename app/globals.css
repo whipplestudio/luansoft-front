@@ -15,7 +15,7 @@
     --sidebar-ring: 40 40% 43%; /* Gold */
 
     --background: 0 0% 100%; /* White */
-    
+
     --card: 0 0% 100%; /* White */
     --card-foreground: 170 40% 15%; /* Dark Green */
     --popover: 0 0% 100%; /* White */
@@ -34,6 +34,14 @@
     --input: 40 20% 80%; /* Light gold/beige */
     --ring: 160 100% 19%; /* Primary Green */
     --radius: 0.5rem;
+
+    /* Add a font-family variable if you want to reference it in your styles */
+    --font-family: "Jost", sans-serif;
+  }
+
+  /* You can also add this to ensure the font is applied globally */
+  html {
+    font-family: "Jost", sans-serif;
   }
 
   .dark {
