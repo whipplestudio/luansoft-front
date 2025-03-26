@@ -6,8 +6,8 @@ interface ProgressBarProps {
 
 const getStatusColor = (percentage: number) => {
   if (percentage <= 33) return "bg-red-600"
-  if (percentage <= 66) return "bg-yellow-400"
-  return "bg-green-600"
+  if (percentage <= 66) return "bg-gold"
+  return "bg-primary-green"
 }
 
 export function ProgressBar({ percentage }: ProgressBarProps) {

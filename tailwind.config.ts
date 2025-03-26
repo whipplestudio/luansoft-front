@@ -18,6 +18,15 @@ module.exports = {
     },
     extend: {
       colors: {
+        // Custom color palette
+        "primary-green": "#006341", // Pantone 3425 C
+        "light-gray": "#E5E1E6", // Pantone 4505 C 70%
+        "dark-green": "#18332F", // Pantone 5467 C
+        gold: "#998542", // Pantone 4505 C
+        "dark-brown": "#998542", // Pantone 448 C
+        "accent-green": "#006341", // Pantone 3425 C (same as primary-green)
+
+        // Theme colors mapping
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

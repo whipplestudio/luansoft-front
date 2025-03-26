@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { User } from "@/types"
+import type { User as UserType } from "@/types"
 import { useRouter } from "next/navigation"
+import { Logo } from "@/components/Logo"
 
 type Notification = {
   id: string
@@ -57,7 +58,7 @@ const mockNotifications: Notification[] = [
 export function Header({ userRole }: { userRole: string | null }) {
   const router = useRouter()
   const [notifications, setNotifications] = useState(mockNotifications)
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<UserType | null>(null)
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user")
@@ -84,15 +85,15 @@ export function Header({ userRole }: { userRole: string | null }) {
     <header className="sticky top-0 z-50 flex h-[60px] w-full items-center justify-between border-b bg-background px-6">
       <div className="flex items-center gap-4">
         {userRole !== "dashboard" && userRole !== "cliente" && <SidebarTrigger />}
-        <h1 className="text-xl font-semibold">CMS Fiscal</h1>
+        <Logo variant="horizontal" color="black" width={150} height={40} className="h-20 w-auto" />
       </div>
       <div className="flex items-center gap-4">
         {userRole !== "cliente" && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative text-primary-green">
                 <Bell className="h-5 w-5" />
-                {unreadCount > 0 && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-destructive" />}
+                {unreadCount > 0 && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-gold" />}
                 <span className="sr-only">Notificaciones</span>
               </Button>
             </DropdownMenuTrigger>
@@ -111,8 +112,8 @@ export function Header({ userRole }: { userRole: string | null }) {
                             notification.severity === "high"
                               ? "bg-destructive"
                               : notification.severity === "medium"
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
+                                ? "bg-gold"
+                                : "bg-primary-green"
                           }`}
                         />
                         <p className="font-medium">{notification.title}</p>
@@ -130,7 +131,7 @@ export function Header({ userRole }: { userRole: string | null }) {
                           e.stopPropagation()
                           markAsRead(notification.id)
                         }}
-                        className="h-8 w-8"
+                        className="h-8 w-8 text-primary-green"
                       >
                         <CheckCircle className="h-4 w-4" />
                         <span className="sr-only">Marcar como leída</span>
@@ -147,7 +148,7 @@ export function Header({ userRole }: { userRole: string | null }) {
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
               <AvatarImage src={user.avatar || `/placeholder.svg?height=32&width=32`} alt={user.name} />
-              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+              <AvatarFallback className="bg-primary-green text-white">{user.name.charAt(0)}</AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

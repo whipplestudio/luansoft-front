@@ -65,15 +65,15 @@ export function AppSidebar({ userRole }: { userRole: string | null }) {
   const filteredItems = items.filter((item) => item.roles.includes(userRole || ""))
 
   return (
-    <Sidebar>
+    <Sidebar className="border-r border-primary-green/20">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Sistema</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-gold">Gestión Fiscal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className={pathname === item.url ? "bg-accent" : ""}>
+                  <SidebarMenuButton asChild className={pathname === item.url ? "bg-accent text-white" : ""}>
                     <Link href={item.url}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
