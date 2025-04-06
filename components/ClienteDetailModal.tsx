@@ -1,120 +1,72 @@
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { format, isValid } from "date-fns"
-import { es } from "date-fns/locale"
-import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, BuildingIcon, MailIcon, UserIcon, CreditCardIcon, ClockIcon, FileTextIcon } from "lucide-react"
-import { useState, useEffect } from "react"
-import axiosInstance from "@/api/config"
+import { Client } from "@/types"
 
+// Actualizar la interfaz ClienteDetailModalProps para reflejar la nueva estructura
 interface ClienteDetailModalProps {
   isOpen: boolean
   onClose: () => void
-  client: any // Cambia 'any' por el tipo correcto de tu cliente cuando lo tengas definido
+  client: Client | null | undefined
 }
 
+// Actualizar el componente para manejar casos donde contador o contacto pueden ser null
 export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailModalProps) {
-  const [regimenFiscal, setRegimenFiscal] = useState<string>("No especificado")
-
-  useEffect(() => {
-    if (client?.regimenFiscalId) {
-      const fetchRegimenFiscal = async () => {
-        try {
-          const token = localStorage.getItem("accessToken")
-          if (!token) throw new Error("No se encontró el token de autenticación")
-
-          const response = await axiosInstance.get(`/regimenfiscal/${client.regimenFiscalId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
-
-          if (response.data.success) {
-            setRegimenFiscal(response.data.data.nombre)
-          }
-        } catch (error) {
-          console.error("Error fetching régimen fiscal:", error)
-          setRegimenFiscal("No disponible")
-        }
-      }
-
-      fetchRegimenFiscal()
-    } else {
-      setRegimenFiscal("No especificado")
-    }
-  }, [client?.regimenFiscalId])
-
   if (!client) return null
-
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return "No disponible"
-    const date = new Date(dateString)
-    return isValid(date) ? format(date, "dd 'de' MMMM 'de' yyyy, HH:mm:ss", { locale: es }) : "Fecha inválida"
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Detalles del Cliente</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">{client.company}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-6 py-4">
-          <div className="flex items-center space-x-4">
-            <UserIcon className="h-6 w-6 text-gray-400" />
-            <div>
-              <h3 className="font-semibold">{`${client.firstName} ${client.lastName}`}</h3>
-              <p className="text-sm text-gray-500">{client.type === "FISICA" ? "Persona Física" : "Persona Moral"}</p>
-            </div>
-            <Badge
-              variant={client.status === "ACTIVE" ? "default" : "destructive"}
-              className={`ml-auto ${client.status === "ACTIVE" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
-            >
+          <div>
+            <p className="text-sm font-medium text-gray-500">Tipo</p>
+            <p>{client.type === "FISICA" ? "Persona Física" : "Persona Moral"}</p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-500">Estado</p>
+            <p className={client.status === "ACTIVE" ? "text-green-600" : "text-red-600"}>
               {client.status === "ACTIVE" ? "Activo" : "Inactivo"}
-            </Badge>
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
-              <BuildingIcon className="h-5 w-5 text-gray-400" />
-              <span>{client.company || "No especificada"}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <MailIcon className="h-5 w-5 text-gray-400" />
-              <span>{client.email || "No especificado"}</span>
-            </div>
+          <div>
+            <p className="text-sm font-medium text-gray-500">Contador Asignado</p>
+            {client.contador ? (
+              <div>
+                <p>{client.contador.name}</p>
+                <p className="text-sm text-gray-500">{client.contador.email}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No hay contador asignado</p>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
-              <CalendarIcon className="h-5 w-5 text-gray-400" />
-              <span>Día límite: {client.limitDay !== undefined ? client.limitDay : "No especificado"}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <ClockIcon className="h-5 w-5 text-gray-400" />
-              <span>Días de gracia: {client.graceDays !== undefined ? client.graceDays : "No especificado"}</span>
-            </div>
+          <div>
+            <p className="text-sm font-medium text-gray-500">Contacto</p>
+            {client.contacto ? (
+              <div>
+                <p>{client.contacto.name}</p>
+                <p className="text-sm text-gray-500">{client.contacto.email}</p>
+                {client.contacto.phone && <p className="text-sm text-gray-500">Tel: {client.contacto.phone}</p>}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No hay contacto asignado</p>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center space-x-2">
-              <CreditCardIcon className="h-5 w-5 text-gray-400" />
-              <span>Nómina: {client.payroll !== undefined ? (client.payroll ? "Sí" : "No") : "No especificado"}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <UserIcon className="h-5 w-5 text-gray-400" />
-              <span>Contador: {client.contadorId || "No asignado"}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <FileTextIcon className="h-5 w-5 text-gray-400" />
-            <span>Régimen Fiscal: {regimenFiscal}</span>
-          </div>
-
-          <div className="flex items-center space-x-2 text-sm text-gray-500">
-            <CalendarIcon className="h-4 w-4" />
-            <span>Creado el: {formatDate(client.createdAt)}</span>
+          <div>
+            <p className="text-sm font-medium text-gray-500">Fecha de creación</p>
+            <p className="text-sm">
+              {new Date(client.createdAt).toLocaleDateString("es-MX", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              })}
+            </p>
           </div>
         </div>
       </DialogContent>

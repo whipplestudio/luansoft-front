@@ -1,5 +1,7 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import type { Contador } from "@/types"
 
@@ -8,63 +10,59 @@ interface InformacionGeneralProps {
 }
 
 export function InformacionGeneral({ contador }: InformacionGeneralProps) {
+  // Obtener las iniciales del nombre para el avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+  }
+
+  const fullName = `${contador.name}`
+  const initials = getInitials(fullName)
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Información del Contador</CardTitle>
+          <CardTitle>Información Personal</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-start space-x-6">
-          <Avatar className="w-24 h-24">
-            <AvatarImage src={contador.avatar} alt={contador.name} />
-            <AvatarFallback>{contador.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">{contador.name}</h2>
-            <p className="text-muted-foreground">{contador.email}</p>
-            <Badge variant={contador.status === "active" ? "success" : "destructive"}>
+        <CardContent className="flex flex-col md:flex-row gap-6">
+          <div className="flex flex-col items-center gap-2">
+            <Avatar className="h-24 w-24">
+              <AvatarFallback className="text-xl">{initials}</AvatarFallback>
+            </Avatar>
+            <Badge variant={contador.status === "active" ? "default" : "destructive"}>
               {contador.status === "active" ? "Activo" : "Inactivo"}
             </Badge>
           </div>
+          <div className="space-y-2 flex-1">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Nombre</p>
+              <p className="text-base">{fullName}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Email</p>
+              <p className="text-base">{contador.email}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Rol</p>
+              <p className="text-base capitalize">{contador.role}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Clientes Asignados</p>
+              <p className="text-base">{contador.clientCount || contador.clients?.length || 0}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Último Acceso</p>
+              <p className="text-base">
+                {contador.lastLogin ? new Date(contador.lastLogin).toLocaleDateString() : "No disponible"}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Detalles de la Cuenta</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-2">
-              <div className="flex justify-between">
-                <dt className="font-medium">ID:</dt>
-                <dd>{contador.id}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="font-medium">Rol:</dt>
-                <dd className="capitalize">{contador.role}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="font-medium">Último acceso:</dt>
-                <dd>{new Date(contador.lastLogin).toLocaleString()}</dd>
-              </div>
-            </dl>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Estadísticas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-2">
-              <div className="flex justify-between">
-                <dt className="font-medium">Clientes asignados:</dt>
-                <dd>{contador.clients.length}</dd>
-              </div>
-              {/* Aquí puedes agregar más estadísticas si las tienes disponibles */}
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   )
 }

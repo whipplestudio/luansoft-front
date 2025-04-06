@@ -69,7 +69,6 @@ export default function UsuariosPage() {
           role: user.role.toLowerCase(),
           status: user.status.toLowerCase() === "active" ? "active" : "inactive",
           lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "Nunca",
-          staff: user.staff || false,
         }))
 
         setUsers(mappedUsers)
@@ -125,10 +124,7 @@ export default function UsuariosPage() {
   }
 
   const handleEdit = (user: User) => {
-    setSelectedUser({
-      ...user,
-      staff: user.staff || false, // Ensure staff property is set
-    })
+    setSelectedUser(user)
     setDialogMode("edit")
     setIsDialogOpen(true)
   }
@@ -168,7 +164,11 @@ export default function UsuariosPage() {
         }
       } catch (error) {
         console.error("Error deleting user:", error)
-        toast.error(error.message || "Error al eliminar el usuario")
+        if (error instanceof Error) {
+          toast.error(error.message || "Error al eliminar el usuario")
+        } else {
+          toast.error("Error al eliminar el usuario")
+        }
       } finally {
         setIsDeletingUser(false)
         // Limpiar el estado del modal de confirmación
@@ -180,6 +180,11 @@ export default function UsuariosPage() {
   const handleCloseConfirmDialog = () => {
     setIsConfirmDialogOpen(false)
     setSelectedUser(null)
+  }
+
+  // Función para verificar si un usuario puede ser editado (solo Administrador y Dashboard)
+  const canEditUser = (role: string) => {
+    return ["administrador", "dashboard"].includes(role.toLowerCase())
   }
 
   const columns: ColumnDef<User>[] = [
@@ -216,17 +221,11 @@ export default function UsuariosPage() {
       header: "Último acceso",
     },
     {
-      accessorKey: "staff",
-      header: "Staff",
-      cell: ({ row }) => {
-        const isStaff = row.getValue("staff") as boolean
-        return isStaff ? "Sí" : "No"
-      },
-    },
-    {
       id: "actions",
       cell: ({ row }) => {
         const user = row.original
+        const isEditableRole = canEditUser(user.role)
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -237,9 +236,9 @@ export default function UsuariosPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => handleEdit(user)}>Editar</DropdownMenuItem>
+              {isEditableRole && <DropdownMenuItem onClick={() => handleEdit(user)}>Editar</DropdownMenuItem>}
               <DropdownMenuItem onClick={() => handleViewDetails(user)}>Ver detalles</DropdownMenuItem>
-              {user.status === "active" && (
+              {user.status === "active" && isEditableRole && (
                 <DropdownMenuItem onClick={() => handleDelete(user)} className="text-red-600">
                   Eliminar
                 </DropdownMenuItem>

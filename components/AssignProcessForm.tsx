@@ -13,12 +13,11 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import type { Client, Process, ProcessAssignment } from "@/types"
 import { cn } from "@/lib/utils"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ChevronDown } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect, type SelectOption } from "@/components/ui/searchable-select"
 
 // Primero, actualizar la interfaz AssignProcessFormData para incluir el nuevo campo paymentPeriod
 const assignProcessSchema = z.object({
@@ -53,11 +52,9 @@ export function AssignProcessForm({
 }: AssignProcessFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [availableProcesses, setAvailableProcesses] = useState<Process[]>(processes)
-  const [openClient, setOpenClient] = useState(false)
-  const [openProcess, setOpenProcess] = useState(false)
   const [isPayrollProcess, setIsPayrollProcess] = useState(false)
-
-  const [open, setOpen] = useState(false)
+  const [clientSearchQuery, setClientSearchQuery] = useState("")
+  const [processSearchQuery, setProcessSearchQuery] = useState("")
 
   const { toast } = useToast()
 
@@ -76,6 +73,38 @@ export function AssignProcessForm({
   })
 
   const selectedClientId = watch("clientId")
+
+  // Filtrar clientes basados en la búsqueda
+  const filteredClients = clients.filter((client) =>
+    client.company.toLowerCase().includes(clientSearchQuery.toLowerCase()),
+  )
+
+  // Convertir clientes filtrados al formato de opciones para SearchableSelect
+  const clientOptions: SelectOption[] = filteredClients.map((client) => ({
+    label: client.company,
+    value: client.id,
+  }))
+
+  // Filtrar procesos basados en la búsqueda
+  const filteredProcesses = availableProcesses.filter((process) =>
+    process.name.toLowerCase().includes(processSearchQuery.toLowerCase()),
+  )
+
+  // Convertir procesos al formato de opciones para SearchableSelect
+  const processOptions: SelectOption[] = filteredProcesses.map((process) => {
+    // Verificar si el proceso ya está asignado y activo para este cliente
+    const isAlreadyAssigned = selectedClientId
+      ? existingAssignments.some(
+          (a) => a.clientId === selectedClientId && a.processId === process.id && a.status === "ACTIVE",
+        )
+      : false
+
+    return {
+      label: process.name,
+      value: process.id,
+      description: isAlreadyAssigned ? "Ya asignado" : undefined,
+    }
+  })
 
   // Actualizar procesos disponibles cuando cambia el cliente seleccionado
   useEffect(() => {
@@ -155,36 +184,18 @@ export function AssignProcessForm({
           name="clientId"
           control={control}
           render={({ field }) => (
-            <Popover open={openClient} onOpenChange={setOpenClient}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={openClient} className="w-full justify-between">
-                  {field.value ? clients.find((client) => client.id === field.value)?.company : "Selecciona un cliente"}
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[300px] p-0">
-                <Command>
-                  <CommandInput placeholder="Buscar cliente..." />
-                  <CommandList className="max-h-[300px] overflow-y-auto">
-                    <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                    <CommandGroup>
-                      {clients.map((client) => (
-                        <CommandItem
-                          key={client.id}
-                          onSelect={() => {
-                            field.onChange(client.id)
-                            setOpenClient(false)
-                          }}
-                          className="cursor-pointer"
-                        >
-                          {client.company}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <SearchableSelect
+              options={clientOptions}
+              selected={field.value}
+              onChange={field.onChange}
+              placeholder="Selecciona un cliente"
+              showSearch={true}
+              multiple={false}
+              searchPlaceholder="Buscar cliente..."
+              noResultsMessage="No se encontraron clientes"
+              onSearchChange={setClientSearchQuery}
+              searchValue={clientSearchQuery}
+            />
           )}
         />
         {errors.clientId && <p className="text-red-500 text-sm">{errors.clientId.message}</p>}
@@ -196,59 +207,19 @@ export function AssignProcessForm({
           name="processId"
           control={control}
           render={({ field }) => (
-            <Popover open={openProcess} onOpenChange={setOpenProcess}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={openProcess}
-                  className="w-full justify-between"
-                  disabled={!selectedClientId}
-                >
-                  {field.value
-                    ? availableProcesses.find((process) => process.id === field.value)?.name
-                    : !selectedClientId
-                      ? "Primero selecciona un cliente"
-                      : "Selecciona un proceso"}
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[300px] p-0">
-                <Command>
-                  <CommandInput placeholder="Buscar proceso..." />
-                  <CommandList className="max-h-[300px] overflow-y-auto">
-                    <CommandEmpty>No se encontraron procesos.</CommandEmpty>
-                    <CommandGroup>
-                      {availableProcesses.map((process) => {
-                        // Verificar si el proceso ya está asignado y activo para este cliente
-                        const isAlreadyAssigned = selectedClientId
-                          ? existingAssignments.some(
-                              (a) =>
-                                a.clientId === selectedClientId && a.processId === process.id && a.status === "ACTIVE",
-                            )
-                          : false
-
-                        return (
-                          <CommandItem
-                            key={process.id}
-                            onSelect={() => {
-                              field.onChange(process.id)
-                              setOpenProcess(false)
-                            }}
-                            className={`cursor-pointer ${isAlreadyAssigned ? "flex justify-between items-center" : ""}`}
-                          >
-                            <span>{process.name}</span>
-                            {isAlreadyAssigned && (
-                              <span className="text-xs text-amber-500 font-medium ml-2">(Ya asignado)</span>
-                            )}
-                          </CommandItem>
-                        )
-                      })}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <SearchableSelect
+              options={processOptions}
+              selected={field.value}
+              onChange={field.onChange}
+              placeholder={!selectedClientId ? "Primero selecciona un cliente" : "Selecciona un proceso"}
+              showSearch={true}
+              multiple={false}
+              searchPlaceholder="Buscar proceso..."
+              noResultsMessage="No se encontraron procesos"
+              isDisabled={!selectedClientId}
+              disabledMessage="Primero selecciona un cliente"
+              onSearchChange={setProcessSearchQuery}
+            />
           )}
         />
         {errors.processId && <p className="text-red-500 text-sm">{errors.processId.message}</p>}

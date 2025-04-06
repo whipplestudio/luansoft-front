@@ -30,11 +30,14 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+// Buscar el import de MultiSelect
+// import { SearchableSelect } from "@/components/ui/searchable-select"
+
 export default function AsignarProcesosPage() {
   const [assignments, setAssignments] = useState<ProcessAssignment[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [selectedClient, setSelectedClient] = useState<string | null>(null)
-  const [selectedProcess, setSelectedProcess] = useState<string | null>(null) // Nuevo estado para el proceso seleccionado
+  const [selectedClient, setSelectedClient] = useState<string>("")
+  const [selectedProcess, setSelectedProcess] = useState<string>("") // Nuevo estado para el proceso seleccionado
   const [isLoading, setIsLoading] = useState(true)
   const [clients, setClients] = useState<Client[]>([])
   const [allActiveClients, setAllActiveClients] = useState<Client[]>([])
@@ -178,17 +181,16 @@ export default function AsignarProcesosPage() {
           if (assignment.client && !uniqueClients.has(assignment.client.id)) {
             uniqueClients.set(assignment.client.id, {
               id: assignment.client.id,
-              name: `${assignment.client.firstName} ${assignment.client.lastName}`,
-              firstName: assignment.client.firstName,
-              lastName: assignment.lastName,
               company: assignment.client.company,
-              email: assignment.client.email,
               type: assignment.client.type,
-              assignedTo: assignment.client.contadorId,
               status: assignment.client.status,
               processes: [],
-              razonSocial: assignment.client.company,
-              lastAssignedDate: assignment.client.updatedAt,
+              regimenFiscalId: assignment.client.regimenFiscalId || null,
+              contador: assignment.client.contador || null,
+              contacto: assignment.client.contacto || null,
+              isAssigned: assignment.client.isAssigned || false,
+              createdAt: assignment.client.createdAt || "",
+              updatedAt: assignment.client.updatedAt || "",
             })
           }
         })
@@ -253,14 +255,14 @@ export default function AsignarProcesosPage() {
   ])
 
   // Manejar cambio de cliente seleccionado
-  const handleClientChange = (clientId: string | null) => {
+  const handleClientChange = (clientId: string) => {
     setSelectedClient(clientId)
     // Resetear a la página 1 cuando se cambia el filtro
     setPagination((prev) => ({ ...prev, page: 1 }))
   }
 
   // Manejar cambio de proceso seleccionado
-  const handleProcessChange = (processId: string | null) => {
+  const handleProcessChange = (processId: string) => {
     setSelectedProcess(processId)
     // Resetear a la página 1 cuando se cambia el filtro
     setPagination((prev) => ({ ...prev, page: 1 }))
@@ -558,7 +560,7 @@ export default function AsignarProcesosPage() {
       }
     } catch (error) {
       console.error("Error al activar el proceso:", error)
-      if (error.response && error.response.status === 404) {
+      if (typeof error === "object" && error !== null && "response" in error && (error as any).response.status === 404) {
         toast.error("Proceso no encontrado o ya está activo")
       } else {
         toast.error("Error al activar el proceso. Por favor, intente nuevamente.")
@@ -599,9 +601,13 @@ export default function AsignarProcesosPage() {
       }
     } catch (error) {
       console.error("Error al marcar el proceso como pagado:", error)
-      if (error.response) {
-        if (error.response.status === 400) {
-          toast.error(error.response.data.message || "Error al marcar el proceso como pagado")
+      if (typeof error === "object" && error !== null && "response" in error) {
+        if (error && typeof error === "object" && "response" in error && (error as any).response.status === 400) {
+          if (error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response) {
+            toast.error((error.response as any).data.message || "Error al marcar el proceso como pagado")
+          } else {
+            toast.error("Error al marcar el proceso como pagado. Por favor, intente nuevamente.")
+          }
         } else {
           toast.error("Error al marcar el proceso como pagado. Por favor, intente nuevamente.")
         }
@@ -801,7 +807,7 @@ export default function AsignarProcesosPage() {
                 <CommandList className="max-h-[300px] overflow-y-auto">
                   <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                   <CommandGroup>
-                    <CommandItem onSelect={() => handleClientChange(null)} className="cursor-pointer">
+                    <CommandItem onSelect={() => handleClientChange("")} className="cursor-pointer">
                       Todos los clientes
                     </CommandItem>
                     {allActiveClients.map((client) => (
@@ -838,7 +844,7 @@ export default function AsignarProcesosPage() {
                 <CommandList className="max-h-[300px] overflow-y-auto">
                   <CommandEmpty>No se encontraron procesos.</CommandEmpty>
                   <CommandGroup>
-                    <CommandItem onSelect={() => handleProcessChange(null)} className="cursor-pointer">
+                    <CommandItem onSelect={() => handleProcessChange("")} className="cursor-pointer">
                       Todos los procesos
                     </CommandItem>
                     {processes.map((process) => (

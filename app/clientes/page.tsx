@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, PlusCircle } from "lucide-react"
+import { MoreHorizontal, PlusCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
-import { mockContadores } from "@/lib/mock-data"
 import { DialogCreateClient } from "@/components/DialogCreateClient"
 import { toast, Toaster } from "sonner"
 import {
@@ -20,41 +19,43 @@ import { ConfirmationDialog } from "@/components/ConfirmationDialog"
 import { debounce } from "@/utils/debounce"
 import axiosInstance from "@/api/config"
 import { ClienteDetailModal } from "@/components/ClienteDetailModal"
+import axios from "axios"
+import { Client } from "@/types"
 
-// Interfaz para la respuesta de la API
+// Actualizar la interfaz ApiClient para reflejar la nueva estructura
 interface ApiClient {
   id: string
-  firstName: string
-  lastName: string
   company: string
-  status: "ACTIVE" | "INACTIVE"
-  userId: string
-  email: string
+  status: string
   type: "FISICA" | "MORAL"
   limitDay: number
   graceDays: number
   payroll: boolean
-  contadorId: string | null
+  payrollFrequencies: string[]
+  regimenFiscalId: string
   createdAt: string
   updatedAt: string
-  regimenFiscalId?: string
-}
-
-// Actualizo la interfaz Client para incluir el regimenFiscalId
-interface Client {
-  id: string
-  name: string
-  firstName: string
-  lastName: string
-  company: string
-  email: string
-  type: "FISICA" | "MORAL"
-  assignedTo: string | null
-  status: string
-  processes: []
-  razonSocial: string
-  lastAssignedDate: string
-  regimenFiscalId?: string // Añado el regimenFiscalId como opcional
+  contador: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
+    status: string
+    userId: string
+    createdAt: string
+    updatedAt: string
+  } | null
+  contacto: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
+    phone: string | null
+    status: string
+    userId: string
+    createdAt: string
+    updatedAt: string
+  } | null
 }
 
 interface ApiResponse {
@@ -75,7 +76,7 @@ export default function ClientesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [selectedClient, setSelectedClient] = useState<Client | null | undefined>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [pagination, setPagination] = useState({
@@ -106,21 +107,8 @@ export default function ClientesPage() {
 
   const columns: ColumnDef<Client>[] = [
     {
-      accessorKey: "name",
-      header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Nombre
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-    },
-    {
       accessorKey: "company",
       header: "Empresa",
-    },
-    {
-      accessorKey: "email",
-      header: "Email",
     },
     {
       accessorKey: "type",
@@ -128,16 +116,6 @@ export default function ClientesPage() {
       cell: ({ row }) => {
         const type = row.getValue("type") as string
         return <div className="capitalize">{type === "FISICA" ? "Persona Física" : "Persona Moral"}</div>
-      },
-    },
-    {
-      accessorKey: "assignedTo",
-      header: "Contador Asignado",
-      cell: ({ row }) => {
-        const assignedTo = row.original.assignedTo
-        if (!assignedTo) return "No asignado"
-        const assignedContador = mockContadores.find((contador) => contador.id === assignedTo)
-        return assignedContador?.name || "No asignado"
       },
     },
     {
@@ -181,7 +159,7 @@ export default function ClientesPage() {
     },
   ]
 
-  // Función para obtener los clientes desde la API
+  // Actualizar la función fetchClients para mapear correctamente los datos
   const fetchClients = useCallback(async (page = 1, limit = 10, filter = "") => {
     setIsLoading(true)
     try {
@@ -202,21 +180,30 @@ export default function ClientesPage() {
       })
 
       if (response.data.success) {
-        // Actualizo la función de mapeo para incluir el regimenFiscalId
+        // Actualizar el mapeo para reflejar la nueva estructura
         const mappedClients: Client[] = response.data.data.data.map((apiClient) => ({
           id: apiClient.id,
-          name: `${apiClient.firstName} ${apiClient.lastName}`,
-          firstName: apiClient.firstName,
-          lastName: apiClient.lastName,
           company: apiClient.company,
-          email: apiClient.email,
           type: apiClient.type,
-          assignedTo: apiClient.contadorId,
-          status: apiClient.status,
-          processes: [],
-          razonSocial: apiClient.company, // Usando company como razonSocial por ahora
-          lastAssignedDate: apiClient.updatedAt,
-          regimenFiscalId: apiClient.regimenFiscalId, // Añado el regimenFiscalId
+          status: apiClient.status as "ACTIVE" | "INACTIVE",
+          regimenFiscalId: apiClient.regimenFiscalId,
+          contador: apiClient.contador
+            ? {
+                id: apiClient.contador.id,
+                name: `${apiClient.contador.firstName} ${apiClient.contador.lastName}`,
+                email: apiClient.contador.email,
+              }
+            : null,
+          contacto: apiClient.contacto
+            ? {
+                id: apiClient.contacto.id,
+                name: `${apiClient.contacto.firstName} ${apiClient.contacto.lastName}`,
+                email: apiClient.contacto.email,
+                phone: apiClient.contacto.phone,
+              }
+            : null,
+          createdAt: apiClient.createdAt,
+          updatedAt: apiClient.updatedAt,
         }))
 
         setClients(mappedClients)
@@ -292,7 +279,7 @@ export default function ClientesPage() {
         }
       } catch (error) {
         console.error("Error al eliminar el cliente:", error)
-        if ((error as any).response && (error as any).response.status === 404) {
+        if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
           toast.error("Cliente no encontrado")
         } else {
           toast.error("Error al eliminar el cliente")

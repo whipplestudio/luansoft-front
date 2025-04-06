@@ -12,7 +12,6 @@ import type { Client, Contador } from "@/types"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
-import { differenceInDays } from "date-fns"
 import { ConfirmationDialog } from "@/components/ConfirmationDialog"
 import { axiosInstance } from "@/lib/axios"
 
@@ -21,6 +20,7 @@ export default function AsignacionClientesPage() {
   const [assignedClients, setAssignedClients] = useState<Client[]>([])
   const [unassignedClients, setUnassignedClients] = useState<Client[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [assignedSearchTerm, setAssignedSearchTerm] = useState("")
   const [openContadorSelect, setOpenContadorSelect] = useState(false)
   const [contadorSearchTerm, setContadorSearchTerm] = useState("")
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
@@ -63,21 +63,19 @@ export default function AsignacionClientesPage() {
       const token = localStorage.getItem("accessToken")
       if (!token) throw new Error("No authentication token found")
 
-      const response = await axiosInstance.get("/assignment/unassigned-clients", {
+      const response = await axiosInstance.get("/assignment/unassigned-clients/contador", {
         headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.data.success) {
         const mappedClients = response.data.data.map((client: any) => ({
           id: client.id,
-          name: `${client.firstName} ${client.lastName}`,
+          name: client.company, // Usar company como nombre
           company: client.company,
           type: client.type,
-          assignedTo: null,
+          isAssigned: !!client.contadorId,
           status: client.status,
           processes: [],
-          lastAssignedDate: null,
-          email: client.email,
           razonSocial: client.company,
         }))
         console.log("Unassigned clients fetched:", mappedClients)
@@ -98,21 +96,19 @@ export default function AsignacionClientesPage() {
       const token = localStorage.getItem("accessToken")
       if (!token) throw new Error("No authentication token found")
 
-      const response = await axiosInstance.get(`/assignment/assigned-clients/${contadorId}`, {
+      const response = await axiosInstance.get(`/assignment/assigned-clients/contador/${contadorId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.data.success) {
         const mappedClients = response.data.data.map((client: any) => ({
           id: client.id,
-          name: `${client.firstName} ${client.lastName}`,
+          name: client.company,
           company: client.company,
           type: client.type,
-          assignedTo: client.contadorId,
+          isAssigned: !!client.contadorId,
           status: client.status,
           processes: [],
-          lastAssignedDate: client.updatedAt,
-          email: client.email,
           razonSocial: client.company,
         }))
         console.log("Assigned clients fetched:", mappedClients)
@@ -132,12 +128,12 @@ export default function AsignacionClientesPage() {
   }, [fetchContadores, fetchUnassignedClients])
 
   const filteredUnassignedClients = useMemo(() => {
-    return unassignedClients.filter(
-      (client) =>
-        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.company.toLowerCase().includes(searchTerm.toLowerCase()),
-    )
+    return unassignedClients.filter((client) => client.company.toLowerCase().includes(searchTerm.toLowerCase()))
   }, [unassignedClients, searchTerm])
+
+  const filteredAssignedClients = useMemo(() => {
+    return assignedClients.filter((client) => client.company.toLowerCase().includes(assignedSearchTerm.toLowerCase()))
+  }, [assignedClients, assignedSearchTerm])
 
   const filteredContadores = useMemo(() => {
     return contadores.filter(
@@ -175,21 +171,17 @@ export default function AsignacionClientesPage() {
       }
 
       const clientToMove = unassignedClients[source.index]
-      const now = new Date().toISOString()
 
       // Actualizar el estado inmediatamente para la UI
       setUnassignedClients((prev) => prev.filter((_, index) => index !== source.index))
-      setAssignedClients((prev) => [
-        ...prev,
-        { ...clientToMove, assignedTo: selectedContador.id, lastAssignedDate: now },
-      ])
+      setAssignedClients((prev) => [...prev, { ...clientToMove, isAssigned: !!selectedContador.id }])
 
       try {
         const token = localStorage.getItem("accessToken")
         if (!token) throw new Error("No authentication token found")
 
         const response = await axiosInstance.post(
-          "/assignment/assign",
+          "/assignment/assign/contador",
           {
             clientId: clientToMove.id,
             contadorId: selectedContador.id,
@@ -200,7 +192,7 @@ export default function AsignacionClientesPage() {
         )
 
         if (response.data.success) {
-          toast.success(`Cliente ${clientToMove.name} asignado a ${selectedContador.name}`)
+          toast.success(`Cliente ${clientToMove.company} asignado a ${selectedContador.name}`)
         } else {
           throw new Error(response.data.message || "Error assigning client")
         }
@@ -225,18 +217,18 @@ export default function AsignacionClientesPage() {
     if (clientToUnassign) {
       // Actualizar el estado inmediatamente para la UI
       setAssignedClients((prev) => prev.filter((client) => client.id !== clientToUnassign.id))
-      setUnassignedClients((prev) => [...prev, { ...clientToUnassign, assignedTo: null }])
+      setUnassignedClients((prev) => [...prev, { ...clientToUnassign, isAssigned: false }])
 
       try {
         const token = localStorage.getItem("accessToken")
         if (!token) throw new Error("No authentication token found")
 
-        const response = await axiosInstance.delete(`/assignment/unassign/${clientToUnassign.id}`, {
+        const response = await axiosInstance.delete(`/assignment/unassign/contador/${clientToUnassign.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
 
         if (response.data.success) {
-          toast.success(`Cliente ${clientToUnassign.name} desasignado`)
+          toast.success(`Cliente ${clientToUnassign.company} desasignado`)
         } else {
           throw new Error(response.data.message || "Error unassigning client")
         }
@@ -254,12 +246,8 @@ export default function AsignacionClientesPage() {
     }
   }
 
-  const getStatusColor = (lastAssignedDate: string | null): "red" | "yellow" | "green" => {
-    if (!lastAssignedDate) return "red"
-    const daysSinceAssigned = differenceInDays(new Date(), new Date(lastAssignedDate))
-    if (daysSinceAssigned === 0) return "green" // Asignación inmediata
-    if (daysSinceAssigned > 15) return "red"
-    if (daysSinceAssigned > 10) return "yellow"
+  const getStatusColor = (isAssigned: boolean): "red" | "yellow" | "green" => {
+    if (!isAssigned) return "red"
     return "green"
   }
 
@@ -268,14 +256,16 @@ export default function AsignacionClientesPage() {
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold">{client.name}</h3>
-            <p className="text-sm text-muted-foreground">{client.company}</p>
+            <h3 className="text-lg font-semibold">{client.company}</h3>
+            <p className="text-sm text-muted-foreground">
+              Tipo: {client.type === "FISICA" ? "Persona Física" : "Persona Moral"}
+            </p>
           </div>
           <Badge
             variant="outline"
-            className={`bg-${getStatusColor(client.lastAssignedDate)}-100 text-${getStatusColor(client.lastAssignedDate)}-800 border-${getStatusColor(client.lastAssignedDate)}-300`}
+            className={`bg-${getStatusColor(client.isAssigned)}-100 text-${getStatusColor(client.isAssigned)}-800 border-${getStatusColor(client?.isAssigned)}-300`}
           >
-            {client.assignedTo ? "Asignado" : "No Asignado"}
+            {client.isAssigned ? "Asignado" : "No Asignado"}
           </Badge>
         </div>
       </CardContent>
@@ -325,11 +315,24 @@ export default function AsignacionClientesPage() {
       </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-2 gap-6 h-[calc(100vh-200px)]">
+        <div className="grid grid-cols-2 gap-6">
           <Card className="h-full flex flex-col">
             <CardContent className="p-4 flex-grow flex flex-col">
               <h2 className="text-xl font-semibold mb-4">Clientes Asignados</h2>
-              <div className="flex-grow overflow-hidden">
+              <div className="mb-4">
+                <Label htmlFor="search-assigned-clients">Buscar Clientes</Label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search-assigned-clients"
+                    placeholder="Buscar por nombre de empresa"
+                    value={assignedSearchTerm}
+                    onChange={(e) => setAssignedSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+              <div className="flex-grow overflow-hidden" style={{ maxHeight: "550px" }}>
                 <Droppable droppableId="assigned">
                   {(provided, snapshot) => (
                     <div
@@ -338,9 +341,10 @@ export default function AsignacionClientesPage() {
                       className={`h-full overflow-y-auto overflow-x-hidden p-4 rounded-lg transition-colors duration-200 ${
                         snapshot.isDraggingOver ? "bg-green-100" : ""
                       }`}
+                      style={{ maxHeight: "100%" }}
                     >
                       <div className="space-y-4">
-                        {assignedClients.map((client, index) => (
+                        {filteredAssignedClients.map((client, index) => (
                           <Draggable key={client.id} draggableId={client.id} index={index}>
                             {(provided) => (
                               <div
@@ -372,14 +376,14 @@ export default function AsignacionClientesPage() {
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="search-clients"
-                    placeholder="Buscar por nombre o empresa"
+                    placeholder="Buscar por nombre de empresa"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-8"
                   />
                 </div>
               </div>
-              <div className="flex-grow overflow-hidden">
+              <div className="flex-grow overflow-hidden" style={{ maxHeight: "550px" }}>
                 <Droppable droppableId="unassigned">
                   {(provided, snapshot) => (
                     <div
@@ -388,6 +392,7 @@ export default function AsignacionClientesPage() {
                       className={`h-full overflow-y-auto overflow-x-hidden p-4 rounded-lg transition-colors duration-200 ${
                         snapshot.isDraggingOver ? "bg-red-100" : ""
                       }`}
+                      style={{ maxHeight: "100%" }}
                     >
                       <div className="space-y-4">
                         {filteredUnassignedClients.map((client, index) => (
@@ -422,7 +427,7 @@ export default function AsignacionClientesPage() {
         }}
         onConfirm={handleUnassignConfirm}
         title="Desasignar Cliente"
-        description={`¿Estás seguro de que quieres desasignar a ${clientToUnassign?.name}? Esta acción no se puede deshacer.`}
+        description={`¿Estás seguro de que quieres desasignar a ${clientToUnassign?.company}? Esta acción no se puede deshacer.`}
         confirmationWord="DESASIGNAR"
         isConfirming={false}
       />

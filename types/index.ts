@@ -1,9 +1,10 @@
+// Actualizar la interfaz User para cambiar "cliente" por "contacto" en el tipo role
 export interface User {
   id: string
   name: string
   email: string
   avatar?: string
-  role: "admin" | "contador" | "dashboard" | "cliente"
+  role: "admin" | "contador" | "dashboard" | "contacto"
   status: "active" | "inactive"
   lastLogin: string
 }
@@ -11,6 +12,8 @@ export interface User {
 export interface Contador extends User {
   role: "contador"
   clients: string[] // Array of client IDs
+  clientCount?: number // Número de clientes asignados
+  clientDetails?: any[] // Detalles completos de los clientes
 }
 
 // Añadir el campo dueDate a la interfaz Process
@@ -18,28 +21,39 @@ export interface Process {
   id: string
   name: string
   description?: string
-  status?: string
+  status: string
   progress: number
   createdAt?: string
   updatedAt?: string
   dueDate?: string // Añadir campo para fecha de vencimiento
-  deliveryStatus?: "onTime" | "atRisk" | "delayed" // Añadir el campo deliveryStatus
+  deliveryStatus?: "onTime" | "atRisk" | "delayed" | "completed" // Añadir el campo deliveryStatus y el estado completed
+  commitmentDate?: string
 }
 
 // Actualizo la interfaz Client para incluir el regimenFiscalId
 export interface Client {
   id: string
-  name: string
   company: string
-  razonSocial: string
-  type: string
-  assignedTo: string | null // ID of the assigned contador or null if unassigned
-  status: "active" | "inactive" | "ACTIVE" | "INACTIVE"
-  processes: Process[]
-  lastAssignedDate: string | null // Date string of last assignment
-  email?: string // Añadir campo email
-  regimenFiscalId?: string // Añadir campo regimenFiscalId
+  type: "FISICA" | "MORAL"
+  status: "ACTIVE" | "INACTIVE"
+  regimenFiscalId: string
+  contador: {
+    id: string
+    name: string
+    email: string
+  } | null
+  contacto: {
+    id: string
+    name: string
+    email: string
+    phone: string | null
+  } | null
+  processes?: Process[]
+  isAssigned: boolean
+  createdAt: string
+  updatedAt: string
 }
+
 
 export interface ClientType {
   id: string
@@ -71,16 +85,45 @@ export interface Notification {
 
 export type SemaphoreStatus = "green" | "yellow" | "red"
 
+export interface ApiClient {
+  id: string
+  company: string
+  contador: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
+    status: string
+  } | null
+  contacto: {
+    id: string
+    email: string
+    firstName: string
+    lastName: string
+    phone: string | null
+    status: string
+  } | null
+  processes: {
+    id: string
+    name: string
+    commitmentDate: string
+    status: string
+    deliveryStatus: "onTime" | "atRisk" | "delayed" | "completed"
+  }[]
+  completionPercentage: string
+}
 export interface FiscalDeliverable {
   id: string
   client: string
+  company: string // Add the company property
   deliverableType: string
-  period: "Mensual" | "Trimestral" | "Anual"
+  period: string
   dueDate: string
   responsible: string
   observations: string
   processes: Process[]
   progressPercentage: number
+  originalData: ApiClient
 }
 
 export interface Document {

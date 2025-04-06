@@ -20,7 +20,7 @@ interface ConfirmationDialogProps {
   title: string
   description: string
   confirmationWord: string
-  isConfirming: boolean
+  isConfirming?: boolean
 }
 
 export function ConfirmationDialog({

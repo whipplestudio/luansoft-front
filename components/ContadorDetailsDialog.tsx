@@ -22,7 +22,7 @@ export function ContadorDetailsDialog({ isOpen, onClose, contador }: ContadorDet
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-7xl w-full h-[90vh] flex flex-col">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-grow flex flex-col">
-          <TabsList className="mb-4 justify-start">
+          <TabsList className="mb-4 justify-start sticky top-0 z-20">
             <TabsTrigger value="informacion" className="flex-1 text-left justify-start">
               Información del Contador
             </TabsTrigger>
@@ -33,7 +33,7 @@ export function ContadorDetailsDialog({ isOpen, onClose, contador }: ContadorDet
           <TabsContent value="informacion" className="flex-grow overflow-auto">
             <InformacionGeneral contador={contador} />
           </TabsContent>
-          <TabsContent value="clientes" className="flex-grow overflow-auto">
+          <TabsContent value="clientes" className="flex-grow overflow-auto h-[calc(90vh-120px)]">
             <ClientesAsignados contador={contador} />
           </TabsContent>
         </Tabs>

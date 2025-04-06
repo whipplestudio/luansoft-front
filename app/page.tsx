@@ -3,18 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback } from "react"
-import {
-  ArrowUpDown,
-  Filter,
-  Maximize,
-  Minimize,
-  Grid,
-  List,
-  Check,
-  ChevronDown,
-  ArrowLeft,
-  Loader2,
-} from "lucide-react"
+import { ArrowUpDown, Filter, Maximize, Minimize, Grid, List, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable } from "@/components/data-table"
@@ -25,83 +14,46 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Pagination } from "@/components/ui/pagination"
 import { ProgressBar } from "@/components/ProgressBar"
 import type { ColumnDef } from "@tanstack/react-table"
-import type { FiscalDeliverable, SemaphoreStatus, Process } from "@/types"
+import type { FiscalDeliverable, SemaphoreStatus, Process, ApiClient } from "@/types"
 import { ClientDetailDialog } from "@/components/ClientDetailDialog"
 import { useRouter } from "next/navigation"
 import { axiosInstance } from "@/lib/axios"
 import { toast } from "sonner"
 import { debounce } from "lodash"
+import { Logo } from "@/components/Logo"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 
 const ITEMS_PER_PAGE = 100
+const BULK_DISPLAY_TIME = 10000 // Time in milliseconds to display each bulk (10 seconds)
 
-// Tipo para los datos de cliente que vienen de la API
-interface ApiClient {
-  id: string
-  firstName: string
-  lastName: string
-  email: string
-  company: string
-  contador: {
-    id: string
-    firstName: string
-    lastName: string
-    email: string
-  } | null
-  processes: {
-    id: string
-    name: string
-    commitmentDate: string
-    status: string
-    deliveryStatus: "onTime" | "atRisk" | "delayed"
-  }[]
-  completionPercentage: string
-}
-
-// Tipo para la respuesta de la API
+// Define the ApiResponse interface
 interface ApiResponse {
   success: boolean
-  message: string
-  errorCode: null
   data: {
-    success: boolean
     data: ApiClient[]
     pagination: {
-      total: number
       page: number
       limit: number
+      total: number
       totalPages: number
     }
-    message: string
   }
+  message?: string
 }
 
-// Mapear el estado de entrega a un color de semáforo
-const mapDeliveryStatusToSemaphore = (status: string): SemaphoreStatus => {
-  switch (status) {
-    case "onTime":
-      return "green"
-    case "atRisk":
-      return "yellow"
-    case "delayed":
-      return "red"
-    default:
-      return "red"
-  }
-}
+// Find the mapApiClientToFiscalDeliverable function and replace it with this updated version
+// that properly handles null contacto and contador objects
 
-// Mapear el porcentaje de completitud a un número
-const parseCompletionPercentage = (percentage: string): number => {
-  return Number.parseFloat(percentage.replace("%", ""))
-}
-
-// Modificar la función mapApiClientToFiscalDeliverable para incluir el deliveryStatus en los procesos mapeados
 const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable => {
   const completionPercentage = parseCompletionPercentage(client.completionPercentage)
+
+  // Safely access contacto properties with null checks
+  const contactName = client.contacto
+    ? `${client.contacto.firstName || ""} ${client.contacto.lastName || ""}`.trim()
+    : "Sin contacto"
 
   // Mapear los procesos al formato esperado por los componentes
   const mappedProcesses: Process[] = client.processes.map((p) => ({
@@ -115,12 +67,14 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
 
   return {
     id: client.id,
-    client: `${client.firstName} ${client.lastName}`,
+    client: contactName,
     company: client.company,
     deliverableType: "Cliente",
     period: "Mensual",
     dueDate: client.processes.length > 0 ? client.processes[0].commitmentDate : new Date().toISOString(),
-    responsible: client.contador ? `${client.contador.firstName} ${client.contador.lastName}` : "No asignado",
+    responsible: client.contador
+      ? `${client.contador.firstName || ""} ${client.contador.lastName || ""}`.trim()
+      : "Sin contador",
     observations: "",
     processes: mappedProcesses,
     progressPercentage: completionPercentage,
@@ -129,12 +83,13 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
   }
 }
 
+// Update the columns definition to match the new structure
 const columns: ColumnDef<FiscalDeliverable>[] = [
   {
     accessorKey: "client",
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="text-xs">
-        Cliente
+        Contacto
         <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
@@ -200,43 +155,146 @@ const columns: ColumnDef<FiscalDeliverable>[] = [
   },
 ]
 
-const MultiSelect = ({ options, selected, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false)
+const mapDeliveryStatusToSemaphore = (status: string): SemaphoreStatus => {
+  switch (status) {
+    case "onTime":
+      return "green"
+    case "atRisk":
+      return "yellow"
+    case "delayed":
+      return "red"
+    default:
+      return "red"
+  }
+}
+
+// Mapear el porcentaje de completitud a un número
+const parseCompletionPercentage = (percentage: string): number => {
+  return Number.parseFloat(percentage.replace("%", ""))
+}
+
+// Component for the airport-style infinite scroll display
+const InfiniteScrollDisplay = ({
+  clients,
+  onClientClick,
+}: { clients: FiscalDeliverable[]; onClientClick: (client: FiscalDeliverable) => void }) => {
+  const [currentBulkIndex, setCurrentBulkIndex] = useState(0)
+  const [clientsPerBulk, setClientsPerBulk] = useState(12) // Default value
+  const [isVisible, setIsVisible] = useState(true) // Add this state for fade effect
+  const totalClients = clients.length
+
+  // Calculate optimal number of clients per bulk based on screen size
+  useEffect(() => {
+    const calculateClientsPerBulk = () => {
+      // Get viewport dimensions
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+
+      // Calculate approximate card dimensions (including margins)
+      // These values should match your CSS for the cards
+      const cardHeight = 120 // Approximate height in pixels
+      const cardWidth = 250 // Approximate width in pixels
+      const cardMargin = 16 // Approximate margin in pixels
+
+      // Calculate how many cards can fit in a row based on viewport width
+      const cardsPerRow = Math.floor(viewportWidth / (cardWidth + cardMargin * 2))
+
+      // Calculate how many rows can fit in the viewport
+      const availableHeight = viewportHeight - 200 // Subtract header/footer space
+      const rowsPerScreen = Math.floor(availableHeight / (cardHeight + cardMargin * 2))
+
+      // Calculate total cards that can fit on screen
+      const optimalCardsPerScreen = cardsPerRow * rowsPerScreen
+
+      // Ensure we have at least 6 cards per bulk
+      return Math.max(optimalCardsPerScreen, 6)
+    }
+
+    // Set initial value
+    setClientsPerBulk(calculateClientsPerBulk())
+
+    // Add resize listener
+    const handleResize = () => {
+      setClientsPerBulk(calculateClientsPerBulk())
+    }
+
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  // If no clients, show a message
+  if (totalClients === 0) {
+    return <div className="text-center py-10 text-gray-500">No se encontraron clientes con los filtros aplicados</div>
+  }
+
+  const totalBulks = Math.ceil(totalClients / clientsPerBulk)
+
+  // Create bulks of clients
+  const clientBulks = Array.from({ length: totalBulks }, (_, i) =>
+    clients.slice(i * clientsPerBulk, (i + 1) * clientsPerBulk),
+  )
+
+  // Auto-scroll to the next bulk after a certain time with fade effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // Start fade out
+      setIsVisible(false)
+
+      // After fade out completes, change the bulk and fade in
+      setTimeout(() => {
+        setCurrentBulkIndex((prevIndex) => (prevIndex + 1) % totalBulks)
+        // Start fade in
+        setIsVisible(true)
+      }, 500) // This should match the CSS transition duration
+    }, BULK_DISPLAY_TIME)
+
+    return () => clearInterval(timer)
+  }, [totalBulks])
+
+  // Get the current bulk of clients to display
+  const currentBulk = clientBulks[currentBulkIndex] || []
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={isOpen} className="w-full justify-between">
-          {selected.length > 0 ? `${selected.length} seleccionados` : "Seleccionar..."}
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0">
-        <Command>
-          <CommandInput placeholder="Buscar..." className="h-9" />
-          <CommandList>
-            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  onSelect={() => {
-                    onChange(
-                      selected.includes(option.value)
-                        ? selected.filter((item) => item !== option.value)
-                        : [...selected, option.value],
-                    )
-                  }}
-                >
-                  <Check className={`mr-2 h-4 w-4 ${selected.includes(option.value) ? "opacity-100" : "opacity-0"}`} />
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <div className="flex flex-col h-[calc(100vh-120px)]">
+      <div className="flex justify-between items-center mb-4">
+        <div className="text-lg font-semibold">
+          Mostrando clientes {currentBulkIndex * clientsPerBulk + 1} -{" "}
+          {Math.min((currentBulkIndex + 1) * clientsPerBulk, totalClients)} de {totalClients}
+        </div>
+        <div className="flex gap-2">
+          {Array.from({ length: totalBulks }).map((_, index) => (
+            <div
+              key={index}
+              className={`h-2 w-2 rounded-full ${index === currentBulkIndex ? "bg-green-500" : "bg-gray-300"}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div
+        className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 md:gap-6 flex-1 transition-opacity duration-500 ease-in-out ${isVisible ? "opacity-100" : "opacity-0"}`}
+      >
+        {currentBulk.map((item: FiscalDeliverable) => (
+          <Card
+            key={item.id}
+            className="overflow-hidden cursor-pointer w-full hover:shadow-lg transition-shadow"
+            onClick={() => onClientClick(item)}
+          >
+            <CardContent className="p-4">
+              <div className="text-sm font-semibold truncate">{item.client}</div>
+              <div className="text-xs text-gray-500 truncate">{item.company}</div>
+              <div className="flex items-center mt-1">
+                <div
+                  className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
+                ></div>
+                <span className="text-xs">{item.progressPercentage}%</span>
+              </div>
+              <div className="text-xs mt-1 text-gray-500">{item.responsible}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -249,11 +307,15 @@ export default function DashboardPage() {
   const [totalItems, setTotalItems] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid")
+  // Add a new state for contacts after the allProcesses state
+  const [allContacts, setAllContacts] = useState<{ id: string; name: string }[]>([])
+  // Add contactIds to the filters state
   const [filters, setFilters] = useState({
     companyName: "",
     statuses: [] as string[],
     contadorIds: [] as string[],
     processIds: [] as string[],
+    contactoIds: [] as string[], // Change from contactIds to contactoIds
   })
   const [selectedClient, setSelectedClient] = useState<FiscalDeliverable | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
@@ -261,6 +323,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [allContadores, setAllContadores] = useState<{ id: string; name: string }[]>([])
   const [allProcesses, setAllProcesses] = useState<{ id: string; name: string }[]>([])
+  const [allClientsData, setAllClientsData] = useState<FiscalDeliverable[]>([])
+  const [isLoadingAllClients, setIsLoadingAllClients] = useState(false)
+  const [initialLoad, setInitialLoad] = useState(true)
+  const [isClient, setIsClient] = useState(false)
 
   // Función para obtener los datos del dashboard
   const fetchDashboardData = useCallback(async () => {
@@ -346,6 +412,35 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // Add a function to fetch contacts after the fetchProcesses function
+  const fetchContacts = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No authentication token found")
+      }
+
+      const response = await axiosInstance.get("/contacto/active", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.data.success) {
+        const contacts = response.data.data.map((contact: any) => ({
+          id: contact.id,
+          name: `${contact.firstName} ${contact.lastName}`,
+        }))
+        setAllContacts(contacts)
+      } else {
+        throw new Error(response.data.message || "Error fetching contacts")
+      }
+    } catch (error) {
+      console.error("Error fetching contacts:", error)
+      toast.error("Error al cargar los contactos")
+    }
+  }, [])
+
   // Función para obtener los clientes con sus detalles
   const fetchClients = useCallback(async (page = 1, limit = ITEMS_PER_PAGE, filters = {}) => {
     setIsLoading(true)
@@ -414,20 +509,70 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    const role = localStorage.getItem("userRole")
-    setUserRole(role)
+  // Function to fetch all clients for fullscreen mode
+  const fetchAllClients = useCallback(async () => {
+    if (isLoadingAllClients) return
 
-    if (role === "cliente") {
-      router.push("/historial")
-    } else {
-      fetchDashboardData()
-      fetchContadores()
-      fetchProcesses()
-      fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+    setIsLoadingAllClients(true)
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No authentication token found")
+      }
+
+      // Use a very high limit to get all clients at once
+      const params: Record<string, any> = {
+        page: 1,
+        limit: 10000, // Set a very high limit to get all clients at once
+      }
+
+      // Add any active filters
+      Object.entries(filters).forEach(([key, value]) => {
+        if (
+          value &&
+          (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
+        ) {
+          params[key] = value
+        }
+      })
+
+      const response = await axiosInstance.get<ApiResponse>("/dashboard/clients", {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        paramsSerializer: (params) => {
+          const searchParams = new URLSearchParams()
+
+          Object.entries(params).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+              value.forEach((val) => searchParams.append(key, val))
+            } else {
+              searchParams.append(key, value)
+            }
+          })
+
+          return searchParams.toString()
+        },
+      })
+
+      if (response.data.success) {
+        const { data } = response.data.data
+        const mappedData = data.map(mapApiClientToFiscalDeliverable)
+        setAllClientsData(mappedData)
+      } else {
+        throw new Error(response.data.message || "Error fetching all clients")
+      }
+    } catch (error) {
+      console.error("Error fetching all clients:", error)
+      toast.error("Error al cargar todos los clientes para el modo pantalla completa")
+    } finally {
+      setIsLoadingAllClients(false)
     }
-  }, [router, fetchDashboardData, fetchContadores, fetchProcesses, fetchClients, currentPage])
+  }, [filters, isLoadingAllClients])
+
+  // Cargar datos iniciales
+  // Update the useEffect to call fetchContacts
 
   // Manejar cambios en los filtros
   const handleFilter = (key: string, value: any) => {
@@ -442,12 +587,14 @@ export default function DashboardPage() {
   }
 
   // Limpiar todos los filtros
+  // Update the clearFilters function to include contactIds
   const clearFilters = () => {
     const emptyFilters = {
       companyName: "",
       statuses: [],
       contadorIds: [],
       processIds: [],
+      contactoIds: [], // Change from contactIds to contactoIds
     }
     setFilters(emptyFilters)
     setCurrentPage(1)
@@ -471,6 +618,7 @@ export default function DashboardPage() {
   // Primero, vamos a modificar el componente FilterContent para usar un estado local y un useEffect con debounce
 
   // Reemplazar el componente FilterContent actual con esta versión:
+  // Update the FilterContent component to include a select for contacts
   const FilterContent = () => {
     // Estado local para el valor del input de empresa
     const [companyNameInput, setCompanyNameInput] = useState(filters.companyName)
@@ -538,18 +686,32 @@ export default function DashboardPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="contadorIds">Responsables</Label>
-          <MultiSelect
+          <SearchableSelect
             options={allContadores.map((contador) => ({ label: contador.name, value: contador.id }))}
             selected={filters.contadorIds}
             onChange={(selected) => handleFilter("contadorIds", selected)}
+            multiple={true}
+            placeholder="Seleccionar responsables"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="contactoIds">Contactos</Label>
+          <SearchableSelect
+            options={allContacts.map((contact) => ({ label: contact.name, value: contact.id }))}
+            selected={filters.contactoIds}
+            onChange={(selected) => handleFilter("contactoIds", selected)}
+            multiple={true}
+            placeholder="Seleccionar contactos"
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="processIds">Procesos</Label>
-          <MultiSelect
+          <SearchableSelect
             options={allProcesses.map((process) => ({ label: process.name, value: process.id }))}
             selected={filters.processIds}
             onChange={(selected) => handleFilter("processIds", selected)}
+            multiple={true}
+            placeholder="Seleccionar procesos"
           />
         </div>
         <Button onClick={clearFilters} variant="outline" className="w-full">
@@ -575,267 +737,330 @@ export default function DashboardPage() {
     setSelectedClient(client)
     setIsDetailDialogOpen(true)
   }
+  // Fetch all clients only once when entering fullscreen mode
+  useEffect(() => {
+    if (isFullscreen && allClientsData.length === 0 && !isLoadingAllClients) {
+      fetchAllClients()
+    }
+  }, [isFullscreen, fetchAllClients, allClientsData.length, isLoadingAllClients])
+
+  // Move the conditional logic inside the useEffect hook
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+    const isClientUser = role === "cliente"
+    setIsClient(isClientUser)
+
+    const fetchData = async () => {
+      await fetchDashboardData()
+      await fetchContadores()
+      await fetchProcesses()
+      await fetchContacts()
+      await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+      setInitialLoad(false)
+    }
+
+    fetchData()
+  }, [fetchDashboardData, fetchContadores, fetchProcesses, fetchContacts, fetchClients, currentPage])
+
+  useEffect(() => {
+    if (isClient) {
+      router.push("/historial")
+    }
+  }, [isClient, router])
+
+  let content = null
 
   if (userRole === "dashboard") {
-    return (
+    content = (
       <div className="container mx-auto py-10">
         <h1 className="text-2xl font-bold mb-6">Dashboard de Visualización</h1>
         {/* Aquí puedes agregar componentes específicos para el dashboard de visualización */}
       </div>
     )
-  }
+  } else if (isClient) {
+    content = null // The client will be redirected to /historial
+  } else {
+    content = (
+      <>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+          {isFullscreen ? (
+            <div className="flex items-center gap-4">
+              <Logo variant="horizontal" color="black" width={150} height={40} className="h-20 w-auto" />
+            </div>
+          ) : (
+            <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-0">Semáforo de Clientes</h1>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Volver al login
+            </Button>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 w-8">
+                  <Filter className="h-4 w-4" />
+                  <span className="sr-only">Filtros</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent>
+                <SheetHeader>
+                  <SheetTitle>Filtros</SheetTitle>
+                  <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
+                </SheetHeader>
+                <div className="mt-4">
+                  <FilterContent />
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button onClick={toggleFullscreen} variant="outline" size="sm" className="h-8 w-8">
+              {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              <span className="sr-only">{isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}</span>
+            </Button>
+            <Select value={viewMode} onValueChange={(value: "grid" | "table") => setViewMode(value)}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="grid">
+                  <div className="flex items-center">
+                    <Grid className="mr-2 h-4 w-4" />
+                    Cuadrícula
+                  </div>
+                </SelectItem>
+                <SelectItem value="table">
+                  <div className="flex items-center">
+                    <List className="mr-2 h-4 w-4" />
+                    Tabla
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
-  if (userRole === "cliente") {
-    return null // The client will be redirected to /historial
+        {!isFullscreen && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
+            <Card className="col-span-1 sm:col-span-3">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Resumen</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex justify-center items-center h-24">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : dashboardData ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Actualizar para usar las nuevas claves de estado */}
+                    {[
+                      {
+                        status: "completed",
+                        label: "Completados",
+                        bgColor: "bg-blue-100",
+                        textColor: "text-blue-800",
+                        count: dashboardData.summary.processes.byStatus.completed.count,
+                        percentage: dashboardData.summary.processes.byStatus.completed.percentage,
+                      },
+                      {
+                        status: "onTime",
+                        label: "En tiempo",
+                        bgColor: "bg-green-100",
+                        textColor: "text-green-800",
+                        count: dashboardData.summary.processes.byStatus.onTime.count,
+                        percentage: dashboardData.summary.processes.byStatus.onTime.percentage,
+                      },
+                      {
+                        status: "atRisk",
+                        label: "En riesgo",
+                        bgColor: "bg-yellow-100",
+                        textColor: "text-yellow-800",
+                        count: dashboardData.summary.processes.byStatus.atRisk.count,
+                        percentage: dashboardData.summary.processes.byStatus.atRisk.percentage,
+                      },
+                      {
+                        status: "delayed",
+                        label: "Atrasados",
+                        bgColor: "bg-red-100",
+                        textColor: "text-red-800",
+                        count: dashboardData.summary.processes.byStatus.delayed.count,
+                        percentage: dashboardData.summary.processes.byStatus.delayed.percentage,
+                      },
+                    ].map(({ status, label, bgColor, textColor, count, percentage }) => (
+                      <div key={status} className={`p-4 rounded-lg ${bgColor} ${textColor}`}>
+                        <h3 className="text-lg font-semibold mb-2">{label}</h3>
+                        <p className="text-3xl font-bold">{count}</p>
+                        <p className="text-sm mt-1">({percentage}% del total)</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500">No hay datos disponibles</div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        {!isFullscreen && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
+            {/* Tarjeta de Clientes */}
+            <Card className="col-span-1">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Clientes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex justify-center items-center h-24">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : dashboardData ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-3 rounded-lg bg-purple-100 text-purple-800">
+                        <h3 className="text-sm font-semibold mb-1">Total</h3>
+                        <p className="text-2xl font-bold">{dashboardData.summary.clients.total}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-teal-100 text-teal-800">
+                        <h3 className="text-sm font-semibold mb-1">Activos</h3>
+                        <p className="text-2xl font-bold">{dashboardData.summary.clients.active}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-gray-100 text-gray-800">
+                        <h3 className="text-sm font-semibold mb-1">Inactivos</h3>
+                        <p className="text-2xl font-bold">{dashboardData.summary.clients.inactive}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500">No hay datos disponibles</div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Tarjeta de Contadores */}
+            <Card className="col-span-1">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Contadores</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex justify-center items-center h-24">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : dashboardData ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-3 rounded-lg bg-indigo-100 text-indigo-800">
+                        <h3 className="text-sm font-semibold mb-1">Total</h3>
+                        <p className="text-2xl font-bold">{dashboardData.summary.contadores.total}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-emerald-100 text-emerald-800">
+                        <h3 className="text-sm font-semibold mb-1">Activos</h3>
+                        <p className="text-2xl font-bold">{dashboardData.summary.contadores.active}</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-slate-100 text-slate-800">
+                        <h3 className="text-sm font-semibold mb-1">Inactivos</h3>
+                        <p className="text-2xl font-bold">{dashboardData.summary.contadores.inactive}</p>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-cyan-100 text-cyan-800">
+                      <h3 className="text-sm font-semibold mb-1">Promedio de clientes por contador</h3>
+                      <p className="text-2xl font-bold">{dashboardData.summary.contadores.averageClientsPerContador}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500">No hay datos disponibles</div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {isFullscreen ? (
+          <div className="mt-4">
+            {isLoadingAllClients ? (
+              <div className="flex justify-center items-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : (
+              <InfiniteScrollDisplay clients={allClientsData} onClientClick={handleCardClick} />
+            )}
+          </div>
+        ) : (
+          <Tabs value={viewMode} onValueChange={(value: string) => setViewMode(value as "grid" | "table")}>
+            <TabsContent value="grid" className="mt-0">
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : clientsData.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 md:gap-6">
+                  {clientsData.map((item) => (
+                    <Card
+                      key={item.id}
+                      className="overflow-hidden cursor-pointer w-full"
+                      onClick={() => handleCardClick(item)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="text-sm font-semibold truncate">{item.client}</div>
+                        <div className="text-xs text-gray-500 truncate">{item.company}</div>
+                        <div className="flex items-center mt-1">
+                          <div
+                            className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
+                          ></div>
+                          <span className="text-xs">{item.progressPercentage}%</span>
+                        </div>
+                        <div className="text-xs mt-1 text-gray-500">{item.responsible}</div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-gray-500">
+                  No se encontraron clientes con los filtros aplicados
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="table" className="mt-0">
+              <DataTable
+                columns={columns}
+                data={clientsData}
+                isLoading={isLoading}
+                pagination={{
+                  pageCount: totalPages,
+                  page: currentPage,
+                  onPageChange: handlePageChange,
+                  perPage: ITEMS_PER_PAGE,
+                  onPerPageChange: () => {}, // No implementado por ahora
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {!isFullscreen && (
+          <div className="mt-4 flex justify-center">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              className="text-xs sm:text-sm"
+            />
+          </div>
+        )}
+        <ClientDetailDialog
+          isOpen={isDetailDialogOpen}
+          onClose={() => setIsDetailDialogOpen(false)}
+          client={selectedClient}
+        />
+      </>
+    )
   }
 
   return (
     <div
       className={`w-full max-w-[2560px] mx-auto py-2 px-2 sm:py-4 sm:px-4 2xl:px-0 ${isFullscreen ? "fullscreen-mode" : ""}`}
     >
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-        <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-0">Semáforo de Clientes</h1>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver al login
-          </Button>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 w-8">
-                <Filter className="h-4 w-4" />
-                <span className="sr-only">Filtros</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>Filtros</SheetTitle>
-                <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
-              </SheetHeader>
-              <div className="mt-4">
-                <FilterContent />
-              </div>
-            </SheetContent>
-          </Sheet>
-          <Button onClick={toggleFullscreen} variant="outline" size="sm" className="h-8 w-8">
-            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-            <span className="sr-only">{isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}</span>
-          </Button>
-          <Select value={viewMode} onValueChange={(value: "grid" | "table") => setViewMode(value)}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="grid">
-                <div className="flex items-center">
-                  <Grid className="mr-2 h-4 w-4" />
-                  Cuadrícula
-                </div>
-              </SelectItem>
-              <SelectItem value="table">
-                <div className="flex items-center">
-                  <List className="mr-2 h-4 w-4" />
-                  Tabla
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
-        <Card className="col-span-1 sm:col-span-3">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Resumen</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center items-center h-24">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : dashboardData ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {/* Actualizar para usar las nuevas claves de estado */}
-                {[
-                  {
-                    status: "completed",
-                    label: "Completados",
-                    bgColor: "bg-blue-100",
-                    textColor: "text-blue-800",
-                    count: dashboardData.summary.processes.byStatus.completed.count,
-                    percentage: dashboardData.summary.processes.byStatus.completed.percentage,
-                  },
-                  {
-                    status: "onTime",
-                    label: "En tiempo",
-                    bgColor: "bg-green-100",
-                    textColor: "text-green-800",
-                    count: dashboardData.summary.processes.byStatus.onTime.count,
-                    percentage: dashboardData.summary.processes.byStatus.onTime.percentage,
-                  },
-                  {
-                    status: "atRisk",
-                    label: "En riesgo",
-                    bgColor: "bg-yellow-100",
-                    textColor: "text-yellow-800",
-                    count: dashboardData.summary.processes.byStatus.atRisk.count,
-                    percentage: dashboardData.summary.processes.byStatus.atRisk.percentage,
-                  },
-                  {
-                    status: "delayed",
-                    label: "Atrasados",
-                    bgColor: "bg-red-100",
-                    textColor: "text-red-800",
-                    count: dashboardData.summary.processes.byStatus.delayed.count,
-                    percentage: dashboardData.summary.processes.byStatus.delayed.percentage,
-                  },
-                ].map(({ status, label, bgColor, textColor, count, percentage }) => (
-                  <div key={status} className={`p-4 rounded-lg ${bgColor} ${textColor}`}>
-                    <h3 className="text-lg font-semibold mb-2">{label}</h3>
-                    <p className="text-3xl font-bold">{count}</p>
-                    <p className="text-sm mt-1">({percentage}% del total)</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-gray-500">No hay datos disponibles</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
-        {/* Tarjeta de Clientes */}
-        <Card className="col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Clientes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center items-center h-24">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : dashboardData ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-3 rounded-lg bg-purple-100 text-purple-800">
-                    <h3 className="text-sm font-semibold mb-1">Total</h3>
-                    <p className="text-2xl font-bold">{dashboardData.summary.clients.total}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-teal-100 text-teal-800">
-                    <h3 className="text-sm font-semibold mb-1">Activos</h3>
-                    <p className="text-2xl font-bold">{dashboardData.summary.clients.active}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-gray-100 text-gray-800">
-                    <h3 className="text-sm font-semibold mb-1">Inactivos</h3>
-                    <p className="text-2xl font-bold">{dashboardData.summary.clients.inactive}</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-gray-500">No hay datos disponibles</div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tarjeta de Contadores */}
-        <Card className="col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Contadores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center items-center h-24">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : dashboardData ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-3 rounded-lg bg-indigo-100 text-indigo-800">
-                    <h3 className="text-sm font-semibold mb-1">Total</h3>
-                    <p className="text-2xl font-bold">{dashboardData.summary.contadores.total}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-emerald-100 text-emerald-800">
-                    <h3 className="text-sm font-semibold mb-1">Activos</h3>
-                    <p className="text-2xl font-bold">{dashboardData.summary.contadores.active}</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-slate-100 text-slate-800">
-                    <h3 className="text-sm font-semibold mb-1">Inactivos</h3>
-                    <p className="text-2xl font-bold">{dashboardData.summary.contadores.inactive}</p>
-                  </div>
-                </div>
-                <div className="p-3 rounded-lg bg-cyan-100 text-cyan-800">
-                  <h3 className="text-sm font-semibold mb-1">Promedio de clientes por contador</h3>
-                  <p className="text-2xl font-bold">{dashboardData.summary.contadores.averageClientsPerContador}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center text-gray-500">No hay datos disponibles</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs value={viewMode} onValueChange={(value: "grid" | "table") => setViewMode(value)}>
-        <TabsContent value="grid" className="mt-0">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-          ) : clientsData.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 md:gap-6">
-              {clientsData.map((item) => (
-                <Card
-                  key={item.id}
-                  className="overflow-hidden cursor-pointer w-full"
-                  onClick={() => handleCardClick(item)}
-                >
-                  <CardContent className="p-4">
-                    <div className="text-sm font-semibold truncate">{item.client}</div>
-                    <div className="text-xs text-gray-500 truncate">{item.company}</div>
-                    <div className="flex items-center mt-1">
-                      <div
-                        className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
-                      ></div>
-                      <span className="text-xs">{item.progressPercentage}%</span>
-                    </div>
-                    <div className="text-xs mt-1 text-gray-500">{item.responsible}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-gray-500">No se encontraron clientes con los filtros aplicados</div>
-          )}
-        </TabsContent>
-        <TabsContent value="table" className="mt-0">
-          <DataTable
-            columns={columns}
-            data={clientsData}
-            isLoading={isLoading}
-            pagination={{
-              pageCount: totalPages,
-              page: currentPage,
-              onPageChange: handlePageChange,
-              perPage: ITEMS_PER_PAGE,
-              onPerPageChange: () => {}, // No implementado por ahora
-            }}
-          />
-        </TabsContent>
-      </Tabs>
-
-      <div className="mt-4 flex justify-center">
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
-          className="text-xs sm:text-sm"
-        />
-      </div>
-      <ClientDetailDialog
-        isOpen={isDetailDialogOpen}
-        onClose={() => setIsDetailDialogOpen(false)}
-        client={selectedClient}
-      />
+      {content}
     </div>
   )
 }

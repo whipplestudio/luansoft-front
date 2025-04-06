@@ -18,13 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ContadorDetailsDialog } from "@/components/ContadorDetailsDialog"
-import { useRouter } from "next/navigation"
 import axiosInstance from "@/api/config"
 import { debounce } from "@/utils/debounce"
 import { toast } from "sonner"
+import axios from "axios"
 
 export default function ContadoresPage() {
-  const router = useRouter()
   const [contadores, setContadores] = useState<Contador[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
@@ -67,9 +66,11 @@ export default function ContadoresPage() {
           name: `${contador.firstName} ${contador.lastName}`,
           email: contador.email,
           role: "contador",
-          status: contador.status.toLowerCase(),
-          lastLogin: contador.lastLogin ? new Date(contador.lastLogin).toLocaleString() : "N/A",
-          clients: [],
+          status: "active", // Asumimos que todos los contadores devueltos están activos
+          lastLogin: "N/A", // Este dato ya no viene en la respuesta
+          clients: contador.clients.map((client: any) => client.id), // Guardamos los IDs de los clientes
+          clientCount: contador.clientCount || contador.clients.length, // Usamos el contador proporcionado o calculamos
+          clientDetails: contador.clients, // Guardamos los detalles completos de los clientes
         }))
 
         setContadores(mappedContadores)
@@ -160,7 +161,7 @@ export default function ContadoresPage() {
         }
       } catch (error) {
         console.error("Error deleting contador:", error)
-        if (error.response && error.response.data) {
+        if (axios.isAxiosError(error) && error.response && error.response.data) {
           toast.error(error.response.data.message || "Error al eliminar el contador")
         } else {
           toast.error("Error al eliminar el contador")
@@ -169,10 +170,6 @@ export default function ContadoresPage() {
         setSelectedContador(null)
       }
     }
-  }
-
-  const handleRowClick = (contador: Contador) => {
-    router.push(`/contadores/${contador.id}/clientes`)
   }
 
   const columns: ColumnDef<Contador>[] = [
@@ -194,9 +191,9 @@ export default function ContadoresPage() {
       ),
     },
     {
-      accessorKey: "clients",
+      accessorKey: "clientCount",
       header: "Clientes Asignados",
-      cell: ({ row }) => row.original.clients.length,
+      cell: ({ row }) => row.original.clientCount || row.original.clients.length,
     },
     {
       id: "actions",
@@ -269,7 +266,6 @@ export default function ContadoresPage() {
       <DataTable
         columns={columns}
         data={contadores}
-        onRowClick={handleRowClick}
         isLoading={isLoading}
         pagination={{
           pageCount: pagination.totalPages,

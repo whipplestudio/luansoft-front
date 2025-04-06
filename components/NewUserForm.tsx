@@ -9,18 +9,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import type { User } from "@/types"
 import axiosInstance from "@/api/config"
 
+// Actualizar el esquema de validación para limitar roles a ADMINISTRADOR y DASHBOARD
 const userSchema = z.object({
   id: z.string().optional(),
   firstName: z.string().min(2, { message: "El nombre debe tener al menos 2 caracteres" }),
   lastName: z.string().min(2, { message: "El apellido debe tener al menos 2 caracteres" }),
   email: z.string().email({ message: "Email inválido" }),
-  role: z.enum(["ADMINISTRADOR", "DASHBOARD", "CONTADOR", "CLIENTE"]),
+  role: z.enum(["ADMINISTRADOR", "DASHBOARD"]),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres" }).optional(),
-  staff: z.boolean().default(false),
 })
 
 type UserFormData = z.infer<typeof userSchema>
@@ -39,15 +38,10 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
     formState: { errors, dirtyFields },
     setValue,
     reset,
-    watch,
   } = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
-    defaultValues: {
-      staff: false,
-    },
+    defaultValues: {},
   })
-
-  const watchStaff = watch("staff")
 
   useEffect(() => {
     if (user) {
@@ -62,7 +56,6 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
         lastName,
         email: user.email,
         role: user.role.toUpperCase() as UserFormData["role"],
-        staff: user.staff || false,
       })
     }
   }, [user, reset])
@@ -78,14 +71,20 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
       // Prepare the data for API
       const apiData: Partial<UserFormData> = {}
       Object.keys(dirtyFields).forEach((key) => {
-        apiData[key] = data[key]
-      })
-
-      // Always include 'staff' field if it's different from the original value
-      if (user && data.staff !== user.staff) {
-        apiData.staff = data.staff
-      }
-
+        const typedKey = key as keyof UserFormData; // Aseguramos que key es una clave válida
+      
+        // Verificamos si el valor es válido antes de asignarlo
+        const value = data[typedKey];
+        if (typedKey === "role") {
+          // Validamos que el valor de "role" sea uno de los valores permitidos
+          if (value === "ADMINISTRADOR" || value === "DASHBOARD") {
+            apiData[typedKey] = value;
+          }
+        } else if (value !== undefined) {
+          apiData[typedKey] = value;
+        }
+      });
+      
       // Always include 'role' field if it's different from the original value
       if (user && data.role !== user.role.toUpperCase()) {
         apiData.role = data.role
@@ -123,8 +122,12 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      if (error.response && error.response.data) {
-        toast.error(error.response.data.message || "Error en la operación del usuario")
+      if ((error as any).response && (error as any).response.data) {
+        if (error instanceof Error && (error as any).response?.data?.message) {
+          toast.error((error as any).response.data.message || "Error en la operación del usuario")
+        } else {
+          toast.error("Error en la operación del usuario")
+        }
       } else {
         toast.error(user ? "Error al actualizar el usuario" : "Error al crear el usuario")
       }
@@ -174,20 +177,9 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
           <SelectContent>
             <SelectItem value="ADMINISTRADOR">Administrador</SelectItem>
             <SelectItem value="DASHBOARD">Dashboard</SelectItem>
-            <SelectItem value="CONTADOR">Contador</SelectItem>
-            <SelectItem value="CLIENTE">Cliente</SelectItem>
           </SelectContent>
         </Select>
         {errors.role && <p className="text-red-500 text-sm">{errors.role.message}</p>}
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <Checkbox
-          id="staff"
-          checked={watchStaff}
-          onCheckedChange={(checked) => setValue("staff", checked as boolean)}
-        />
-        <Label htmlFor="staff">Es staff</Label>
       </div>
 
       <Button type="submit" disabled={isSubmitting}>
