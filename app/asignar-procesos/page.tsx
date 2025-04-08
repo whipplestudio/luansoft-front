@@ -19,6 +19,7 @@ import {
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import axiosInstance from "@/api/config"
+import axios from "axios"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ConfirmationDialog } from "@/components/ConfirmationDialog"
@@ -29,6 +30,9 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+// Añadir la importación del nuevo componente al principio del archivo, junto con las otras importaciones
+import { UploadPaymentProofDialog } from "@/components/UploadPaymentProofDialog"
 
 // Buscar el import de MultiSelect
 // import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -61,6 +65,11 @@ export default function AsignarProcesosPage() {
   // Añadir un nuevo estado para los días de gracia después de la declaración del estado newCommitmentDate
   const [newGraceDays, setNewGraceDays] = useState<number | undefined>(undefined)
   const [isUpdating, setIsUpdating] = useState(false)
+
+  // Primero, añadir un nuevo estado para el diálogo de carga de archivos después de la declaración de isUpdating
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [processingAssignment, setProcessingAssignment] = useState<ProcessAssignment | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
   // Primero, añadamos un nuevo estado para las frecuencias de nómina
   const [newPayrollFrequencies, setNewPayrollFrequencies] = useState<string[]>([])
@@ -560,7 +569,12 @@ export default function AsignarProcesosPage() {
       }
     } catch (error) {
       console.error("Error al activar el proceso:", error)
-      if (typeof error === "object" && error !== null && "response" in error && (error as any).response.status === 404) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        (error as any).response.status === 404
+      ) {
         toast.error("Proceso no encontrado o ya está activo")
       } else {
         toast.error("Error al activar el proceso. Por favor, intente nuevamente.")
@@ -571,49 +585,60 @@ export default function AsignarProcesosPage() {
   // Primero, añadamos la función para marcar un proceso como pagado después de la función handleActivateProcess
   // Añadir después de la función handleActivateProcess
 
-  const handleMarkAsPaid = async (assignment: ProcessAssignment) => {
+  // Reemplazar la función handleMarkAsPaid existente con esta nueva implementación
+  const handleMarkAsPaid = (assignment: ProcessAssignment) => {
+    setProcessingAssignment(assignment)
+    setIsUploadDialogOpen(true)
+  }
+
+  // Añadir esta nueva función después de handleMarkAsPaid
+  const uploadPaymentProofAndMarkAsPaid = async (file: File) => {
+    if (!processingAssignment) return
+
+    setIsUploading(true)
     try {
       const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
-      }
+      if (!token) throw new Error("No authentication token found")
 
-      // Llamar a la API para marcar el proceso como pagado
+      // Crear un FormData para enviar el archivo
+      const formData = new FormData()
+      formData.append("file", file)
+
+      // Llamar a la API para marcar el proceso como pagado con el archivo adjunto
       const response = await axiosInstance.patch(
-        `/process/assign/${assignment.clientId}/${assignment.processId}/mark-paid`,
-        {},
+        `/process/assign/${processingAssignment.clientId}/${processingAssignment.processId}/mark-paid`,
+        formData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
           },
         },
       )
 
       if (response.data.success) {
         // Actualizar el estado local cambiando el status del proceso a PAID
-        setAssignments(assignments.map((a) => (a.id === assignment.id ? { ...a, status: "PAID" } : a)))
+        setAssignments(assignments.map((a) => (a.id === processingAssignment.id ? { ...a, status: "PAID" } : a)))
         toast.success("Proceso marcado como pagado exitosamente")
 
         // Recargar los datos para asegurar que todo está sincronizado
         fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
+
+        // Cerrar el diálogo
+        setIsUploadDialogOpen(false)
+        setProcessingAssignment(null)
       } else {
         throw new Error(response.data.message || "Error al marcar el proceso como pagado")
       }
     } catch (error) {
       console.error("Error al marcar el proceso como pagado:", error)
-      if (typeof error === "object" && error !== null && "response" in error) {
-        if (error && typeof error === "object" && "response" in error && (error as any).response.status === 400) {
-          if (error && typeof error === "object" && "response" in error && error.response && typeof error.response === "object" && "data" in error.response) {
-            toast.error((error.response as any).data.message || "Error al marcar el proceso como pagado")
-          } else {
-            toast.error("Error al marcar el proceso como pagado. Por favor, intente nuevamente.")
-          }
-        } else {
-          toast.error("Error al marcar el proceso como pagado. Por favor, intente nuevamente.")
-        }
+      if (axios.isAxiosError(error) && error.response && error.response.data) {
+        toast.error(error.response.data.message || "Error al marcar el proceso como pagado")
       } else {
         toast.error("Error al marcar el proceso como pagado. Por favor, intente nuevamente.")
       }
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -787,7 +812,6 @@ export default function AsignarProcesosPage() {
           <PlusCircle className="mr-2 h-4 w-4" /> Asignar Proceso
         </Button>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Filtro por Cliente */}
         <div>
@@ -863,7 +887,6 @@ export default function AsignarProcesosPage() {
           </Popover>
         </div>
       </div>
-
       <DataTable
         columns={columns}
         data={assignments}
@@ -877,7 +900,6 @@ export default function AsignarProcesosPage() {
           onPerPageChange: handleLimitChange,
         }}
       />
-
       {/* Diálogo para asignar proceso */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
@@ -893,7 +915,6 @@ export default function AsignarProcesosPage() {
           />
         </DialogContent>
       </Dialog>
-
       {/* Diálogo para editar fecha de compromiso */}
       <Dialog
         open={isEditDialogOpen}
@@ -1068,7 +1089,6 @@ export default function AsignarProcesosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Diálogo de confirmación para eliminar */}
       <ConfirmationDialog
         isOpen={isConfirmDialogOpen}
@@ -1078,6 +1098,12 @@ export default function AsignarProcesosPage() {
         description={description}
         confirmationWord={confirmationWord}
         isConfirming={isConfirming}
+      />
+      <UploadPaymentProofDialog
+        isOpen={isUploadDialogOpen}
+        onClose={() => setIsUploadDialogOpen(false)}
+        onUpload={uploadPaymentProofAndMarkAsPaid}
+        isUploading={isUploading}
       />
     </div>
   )

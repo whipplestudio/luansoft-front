@@ -16,10 +16,11 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SearchableSelect, type SelectOption } from "@/components/ui/searchable-select"
 
-// Primero, actualizar la interfaz AssignProcessFormData para incluir el nuevo campo paymentPeriod
+// Actualizar el esquema de validación para incluir mensajes de error en español
+// Modificamos la validación de commitmentDate para que sea realmente opcional durante la entrada
+// pero se valide antes de enviar el formulario
 const assignProcessSchema = z.object({
   clientId: z.string().min(1, "El cliente es requerido"),
   processId: z.string().min(1, "El proceso es requerido"),
@@ -27,7 +28,7 @@ const assignProcessSchema = z.object({
     .date({
       required_error: "La fecha de compromiso es requerida",
     })
-    .optional(),
+    .optional(), // Hacemos que sea opcional para la validación inicial
   graceDays: z.number().min(0, "Los días de gracia no pueden ser negativos").default(0).optional(),
   payrollFrequencies: z.array(z.enum(["QUINCENAL", "SEMANAL"])).optional(),
   paymentPeriod: z.enum(["MONTHLY", "ANNUAL"]).optional(),
@@ -55,6 +56,7 @@ export function AssignProcessForm({
   const [isPayrollProcess, setIsPayrollProcess] = useState(false)
   const [clientSearchQuery, setClientSearchQuery] = useState("")
   const [processSearchQuery, setProcessSearchQuery] = useState("")
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false) // Estado para controlar la apertura del calendario
 
   const { toast } = useToast()
 
@@ -65,14 +67,25 @@ export function AssignProcessForm({
     watch,
     setValue,
     reset,
+    trigger,
   } = useForm<AssignProcessFormData>({
     resolver: zodResolver(assignProcessSchema),
     defaultValues: {
       graceDays: 0,
+      paymentPeriod: "MONTHLY", // Valor por defecto
     },
   })
 
   const selectedClientId = watch("clientId")
+  const selectedProcessId = watch("processId")
+  const commitmentDate = watch("commitmentDate")
+  const paymentPeriod = watch("paymentPeriod")
+
+  // Opciones para el período de pago
+  const paymentPeriodOptions: SelectOption[] = [
+    { label: "Mensual", value: "MONTHLY" },
+    { label: "Anual", value: "ANNUAL" },
+  ]
 
   // Filtrar clientes basados en la búsqueda
   const filteredClients = clients.filter((client) =>
@@ -116,9 +129,8 @@ export function AssignProcessForm({
 
   // Añadir un nuevo useEffect para detectar si el proceso seleccionado es nómina
   useEffect(() => {
-    const selectedProcess = watch("processId")
-    if (selectedProcess) {
-      const process = processes.find((p) => p.id === selectedProcess)
+    if (selectedProcessId) {
+      const process = processes.find((p) => p.id === selectedProcessId)
       if (process) {
         const isPayroll = process.name.toLowerCase() === "nómina" || process.name.toLowerCase() === "nomina"
         setIsPayrollProcess(isPayroll)
@@ -130,12 +142,13 @@ export function AssignProcessForm({
           setValue("payrollFrequencies", [])
         } else {
           setValue("payrollFrequencies", undefined)
+          // No reseteamos la fecha de compromiso si ya existe
         }
       }
     }
-  }, [watch("processId"), processes, setValue])
+  }, [selectedProcessId, processes, setValue])
 
-  // Actualizar la función onSubmit para incluir el paymentPeriod en los datos enviados
+  // Actualizar la función onSubmit para validar la fecha de compromiso
   const onSubmit = async (data: AssignProcessFormData) => {
     setIsSubmitting(true)
 
@@ -150,6 +163,17 @@ export function AssignProcessForm({
           payrollFrequencies: data.payrollFrequencies,
         }
       } else {
+        // Validar que la fecha de compromiso esté presente para procesos que no son de nómina
+        if (!data.commitmentDate) {
+          toast({
+            title: "Error de validación",
+            description: "La fecha de compromiso es requerida para este tipo de proceso.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
+
         // Datos para otros procesos, ahora incluyendo paymentPeriod
         submissionData = {
           clientId: data.clientId,
@@ -176,6 +200,13 @@ export function AssignProcessForm({
     }
   }
 
+  // Función para manejar la selección de fecha
+  const handleDateSelect = (date: Date | undefined) => {
+    setValue("commitmentDate", date)
+    setIsCalendarOpen(false) // Cerrar el calendario después de seleccionar
+    trigger("commitmentDate") // Disparar validación
+  }
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div>
@@ -198,7 +229,7 @@ export function AssignProcessForm({
             />
           )}
         />
-        {errors.clientId && <p className="text-red-500 text-sm">{errors.clientId.message}</p>}
+        {errors.clientId && <p className="text-red-500 text-sm mt-1">{errors.clientId.message}</p>}
       </div>
 
       <div>
@@ -222,7 +253,7 @@ export function AssignProcessForm({
             />
           )}
         />
-        {errors.processId && <p className="text-red-500 text-sm">{errors.processId.message}</p>}
+        {errors.processId && <p className="text-red-500 text-sm mt-1">{errors.processId.message}</p>}
       </div>
 
       {isPayrollProcess ? (
@@ -274,36 +305,44 @@ export function AssignProcessForm({
               <Label htmlFor="semanal">Semanal</Label>
             </div>
           </div>
-          {errors.payrollFrequencies && <p className="text-red-500 text-sm">{errors.payrollFrequencies.message}</p>}
+          {errors.payrollFrequencies && (
+            <p className="text-red-500 text-sm mt-1">{errors.payrollFrequencies.message}</p>
+          )}
         </div>
       ) : (
         <>
           <div>
             <Label htmlFor="commitmentDate">Fecha de Compromiso</Label>
-            <Controller
-              name="commitmentDate"
-              control={control}
-              render={({ field }) => (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !field.value && "text-muted-foreground",
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value ? format(field.value, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={es} />
-                  </PopoverContent>
-                </Popover>
-              )}
-            />
-            {errors.commitmentDate && <p className="text-red-500 text-sm">{errors.commitmentDate.message}</p>}
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="commitmentDate"
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !commitmentDate && "text-muted-foreground",
+                    errors.commitmentDate && "border-red-500",
+                  )}
+                  onClick={() => setIsCalendarOpen(true)}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {commitmentDate ? format(commitmentDate, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={commitmentDate}
+                  onSelect={handleDateSelect}
+                  initialFocus
+                  locale={es}
+                />
+              </PopoverContent>
+            </Popover>
+            {errors.commitmentDate && <p className="text-red-500 text-sm mt-1">{errors.commitmentDate.message}</p>}
+            {!isPayrollProcess && !commitmentDate && selectedProcessId && (
+              <p className="text-amber-500 text-sm mt-1">La fecha de compromiso es requerida</p>
+            )}
           </div>
 
           <div>
@@ -322,7 +361,7 @@ export function AssignProcessForm({
                 />
               )}
             />
-            {errors.graceDays && <p className="text-red-500 text-sm">{errors.graceDays.message}</p>}
+            {errors.graceDays && <p className="text-red-500 text-sm mt-1">{errors.graceDays.message}</p>}
           </div>
 
           <div>
@@ -332,18 +371,18 @@ export function AssignProcessForm({
               control={control}
               defaultValue="MONTHLY"
               render={({ field }) => (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Seleccionar período" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MONTHLY">Mensual</SelectItem>
-                    <SelectItem value="ANNUAL">Anual</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={paymentPeriodOptions}
+                  selected={field.value as string}
+                  onChange={field.onChange}
+                  placeholder="Seleccionar período"
+                  showSearch={false} // Sin buscador
+                  multiple={false} // Selección única
+                  noResultsMessage="No se encontraron opciones"
+                />
               )}
             />
-            {errors.paymentPeriod && <p className="text-red-500 text-sm">{errors.paymentPeriod.message}</p>}
+            {errors.paymentPeriod && <p className="text-red-500 text-sm mt-1">{errors.paymentPeriod.message}</p>}
           </div>
         </>
       )}
@@ -366,4 +405,3 @@ export function AssignProcessForm({
     </form>
   )
 }
-

@@ -13,8 +13,19 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Users, UserCircle, Calculator, UserPlus, FileText, ClipboardList } from "lucide-react"
+// Primero, importar el ícono History de lucide-react
+import {
+  LayoutDashboard,
+  Users,
+  UserCircle,
+  Calculator,
+  UserPlus,
+  FileText,
+  ClipboardList,
+  History,
+} from "lucide-react"
 
+// Luego, añadir el nuevo ítem al array de items
 const items = [
   {
     title: "Dashboard",
@@ -56,6 +67,12 @@ const items = [
     title: "Asignación de Procesos",
     url: "/asignar-procesos",
     icon: ClipboardList,
+    roles: ["admin", "contador"],
+  },
+  {
+    title: "Histórico de Procesos",
+    url: "/historico-procesos",
+    icon: History,
     roles: ["admin", "contador"],
   },
 ]
