@@ -71,7 +71,7 @@ export function ConfirmationDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={inputValue.toLowerCase() !== confirmationWord.toLowerCase() || isConfirming}
+            disabled={inputValue.toLowerCase() !== confirmationWord?.toLowerCase() || isConfirming}
           >
             {isConfirming ? (
               <>

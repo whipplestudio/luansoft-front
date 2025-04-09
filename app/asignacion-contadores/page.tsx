@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { ConfirmationDialog } from "@/components/ConfirmationDialog"
 import { axiosInstance } from "@/lib/axios"
 
-export default function AsignacionClientesPage() {
+export default function AsignacionContadoresPage() {
   const [selectedContador, setSelectedContador] = useState<Contador | null>(null)
   const [assignedClients, setAssignedClients] = useState<Client[]>([])
   const [unassignedClients, setUnassignedClients] = useState<Client[]>([])
@@ -279,7 +279,7 @@ export default function AsignacionClientesPage() {
   return (
     <div className="container mx-auto py-10">
       <Toaster />
-      <h1 className="text-2xl font-bold mb-6">Asignación de Clientes</h1>
+      <h1 className="text-2xl font-bold mb-6">Asignación de Contadores</h1>
       <div className="mb-6">
         <Label htmlFor="contador-select">Seleccionar Contador</Label>
         <Popover open={openContadorSelect} onOpenChange={setOpenContadorSelect}>
@@ -434,4 +434,3 @@ export default function AsignacionClientesPage() {
     </div>
   )
 }
-

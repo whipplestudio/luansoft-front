@@ -48,12 +48,27 @@ export interface Client {
     email: string
     phone: string | null
   } | null
-  processes?: Process[]
   isAssigned: boolean
   createdAt: string
   updatedAt: string
 }
 
+// Nueva interfaz para Contacto
+export interface Contacto {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string | null
+  status: "ACTIVE" | "INACTIVE"
+  clientId?: string
+  client?: {
+    id: string
+    company: string
+  }
+  createdAt: string
+  updatedAt: string
+}
 
 export interface ClientType {
   id: string
@@ -102,7 +117,7 @@ export interface ApiClient {
     lastName: string
     phone: string | null
     status: string
-  } | null
+  }
   processes: {
     id: string
     name: string
@@ -175,4 +190,3 @@ export interface Dashboard {
     data: string
   }[]
 }
-

@@ -193,7 +193,6 @@ export default function AsignarProcesosPage() {
               company: assignment.client.company,
               type: assignment.client.type,
               status: assignment.client.status,
-              processes: [],
               regimenFiscalId: assignment.client.regimenFiscalId || null,
               contador: assignment.client.contador || null,
               contacto: assignment.client.contacto || null,

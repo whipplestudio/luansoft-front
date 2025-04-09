@@ -13,7 +13,6 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-// Primero, importar el ícono History de lucide-react
 import {
   LayoutDashboard,
   Users,
@@ -23,9 +22,10 @@ import {
   FileText,
   ClipboardList,
   History,
+  Contact,
 } from "lucide-react"
 
-// Luego, añadir el nuevo ítem al array de items
+// Actualizar el ítem "Asignación de Clientes" a "Asignación de Contadores"
 const items = [
   {
     title: "Dashboard",
@@ -52,8 +52,20 @@ const items = [
     roles: ["admin", "contador"],
   },
   {
-    title: "Asignación de Clientes",
-    url: "/asignacion-clientes",
+    title: "Contactos",
+    url: "/contactos",
+    icon: Contact,
+    roles: ["admin", "contador"],
+  },
+  {
+    title: "Asignación de Contadores",
+    url: "/asignacion-contadores",
+    icon: UserPlus,
+    roles: ["admin"],
+  },
+  {
+    title: "Asignación de Contactos",
+    url: "/asignacion-contactos",
     icon: UserPlus,
     roles: ["admin"],
   },
@@ -106,4 +118,3 @@ export function AppSidebar({ userRole }: { userRole: string | null }) {
     </Sidebar>
   )
 }
-
