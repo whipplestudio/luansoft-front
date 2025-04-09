@@ -5,13 +5,15 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useRouter } from "next/navigation"
-import { toast, Toaster } from "sonner"
+import { Toaster } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import axiosInstance from "@/api/config"
 import { Logo } from "@/components/Logo"
+
+type UserRole = "ADMINISTRADOR" | "CONTADOR" | "CONTACTO" | "DASHBOARD"
 
 const loginSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
@@ -45,14 +47,14 @@ export default function LoginPage() {
         const { accessToken, refreshToken, user } = response.data.data
 
         // Map the API role to our internal role format
-        const roleMapping = {
+        const roleMapping: Record<UserRole, string> = {
           ADMINISTRADOR: "admin",
           CONTADOR: "contador",
-          CLIENTE: "cliente",
+          CONTACTO: "contacto",
           DASHBOARD: "dashboard",
         }
 
-        const mappedRole = roleMapping[user.role] || "cliente"
+        const mappedRole = roleMapping[user.role as UserRole] || "contacto"
 
         localStorage.setItem("accessToken", accessToken)
         localStorage.setItem("refreshToken", refreshToken)
@@ -71,9 +73,9 @@ export default function LoginPage() {
       } else {
         throw new Error(response.data.message || "Error de inicio de sesión")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error durante el inicio de sesión:", error)
-      toast.error(error.message || "Error al iniciar sesión. Por favor, intente nuevamente.")
+      // No toast here as it's already handled by the interceptors
     } finally {
       setIsLoading(false)
     }
@@ -85,7 +87,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md border-primary-green/20 shadow-lg">
         <CardHeader className="bg-primary-green text-white rounded-t-lg">
           <div className="flex justify-center mb-4">
-            <Logo variant="vertical" color="white" width={300} height={320}  />
+            <Logo variant="vertical" color="white" width={300} height={320} />
           </div>
           <CardTitle className="text-center">Iniciar sesión</CardTitle>
           <CardDescription className="text-light-gray text-center">
@@ -113,4 +115,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
