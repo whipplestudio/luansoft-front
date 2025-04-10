@@ -190,3 +190,14 @@ export interface Dashboard {
     data: string
   }[]
 }
+
+// Add the RegimenFiscal interface after the existing interfaces
+
+export interface RegimenFiscal {
+  id: string
+  nombre: string
+  descripcion: string
+  status: "ACTIVE" | "INACTIVE"
+  createdAt: string
+  updatedAt: string
+}

@@ -76,6 +76,12 @@ const items = [
     roles: ["admin"],
   },
   {
+    title: "Regímenes Fiscales",
+    url: "/regimenes-fiscales",
+    icon: FileText,
+    roles: ["admin"],
+  },
+  {
     title: "Asignación de Procesos",
     url: "/asignar-procesos",
     icon: ClipboardList,
