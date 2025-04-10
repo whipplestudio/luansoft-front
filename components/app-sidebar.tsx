@@ -31,7 +31,7 @@ const items = [
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
-    roles: ["admin", "contador"],
+    roles: ["admin", "contador", "dashboard"],
   },
   {
     title: "Usuarios",

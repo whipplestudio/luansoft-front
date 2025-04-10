@@ -750,18 +750,20 @@ export default function DashboardPage() {
     setUserRole(role)
     const isClientUser = role === "cliente"
     setIsClient(isClientUser)
+  }, [])
 
-    const fetchData = async () => {
-      await fetchDashboardData()
-      await fetchContadores()
-      await fetchProcesses()
-      await fetchContacts()
-      await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
-      setInitialLoad(false)
-    }
+  const fetchData = useCallback(async () => {
+    await fetchDashboardData()
+    await fetchContadores()
+    await fetchProcesses()
+    await fetchContacts()
+    await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+    setInitialLoad(false)
+  }, [fetchDashboardData, fetchContadores, fetchProcesses, fetchContacts, fetchClients, currentPage, filters])
 
+  useEffect(() => {
     fetchData()
-  }, [fetchDashboardData, fetchContadores, fetchProcesses, fetchContacts, fetchClients, currentPage])
+  }, [fetchData])
 
   useEffect(() => {
     if (isClient) {
@@ -771,14 +773,7 @@ export default function DashboardPage() {
 
   let content = null
 
-  if (userRole === "dashboard") {
-    content = (
-      <div className="container mx-auto py-10">
-        <h1 className="text-2xl font-bold mb-6">Dashboard de Visualización</h1>
-        {/* Aquí puedes agregar componentes específicos para el dashboard de visualización */}
-      </div>
-    )
-  } else if (isClient) {
+  if (isClient) {
     content = null // The client will be redirected to /historial
   } else {
     content = (
@@ -1064,4 +1059,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-
