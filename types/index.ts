@@ -48,7 +48,12 @@ export interface Client {
     email: string
     phone: string | null
   } | null
-  isAssigned: boolean
+  regimenFiscal: {
+    id: string,
+    nombre: string
+    descripcion: string
+  } | string
+  isAssigned?: boolean
   createdAt: string
   updatedAt: string
 }

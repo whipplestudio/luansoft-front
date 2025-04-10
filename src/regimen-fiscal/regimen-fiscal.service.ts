@@ -20,6 +20,20 @@ export interface RegimenFiscalResponse {
   }
 }
 
+export interface RegimenFiscalActiveResponse {
+  success: boolean
+  message: string
+  errorCode: null | string
+  data: Array<{
+    id: string
+    nombre: string
+    descripcion: string
+    status: "ACTIVE"
+    createdAt: string
+    updatedAt: string
+  }>
+}
+
 export interface RegimenFiscalCreateUpdateDto {
   nombre?: string
   descripcion?: string
@@ -33,6 +47,16 @@ export const getRegimenesFiscales = async (page = 1, limit = 10, filter = "") =>
     return response.data
   } catch (error) {
     console.error("Error fetching regimenes fiscales:", error)
+    throw error
+  }
+}
+
+export const getActiveRegimenesFiscales = async () => {
+  try {
+    const response = await axiosInstance.get<RegimenFiscalActiveResponse>(`/regimenfiscal/activos`)
+    return response.data
+  } catch (error) {
+    console.error("Error fetching active regimenes fiscales:", error)
     throw error
   }
 }

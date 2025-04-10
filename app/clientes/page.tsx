@@ -45,6 +45,11 @@ interface ApiClient {
     createdAt: string
     updatedAt: string
   } | null
+  regimenFiscal: {
+    id: string,
+    nombre: string
+    descripcion: string
+  }
   contacto: {
     id: string
     email: string
@@ -119,6 +124,10 @@ export default function ClientesPage() {
       },
     },
     {
+      accessorKey: "regimenFiscal",
+      header: "Regimen fiscal"
+    },
+    {
       accessorKey: "status",
       header: "Estado",
       cell: ({ row }) => {
@@ -186,7 +195,8 @@ export default function ClientesPage() {
           company: apiClient.company,
           type: apiClient.type,
           status: apiClient.status as "ACTIVE" | "INACTIVE",
-          regimenFiscalId: apiClient.regimenFiscalId,
+          regimenFiscalId: apiClient.regimenFiscal.id,
+          regimenFiscal: apiClient.regimenFiscal.nombre,
           contador: apiClient.contador
             ? {
                 id: apiClient.contador.id,
@@ -204,6 +214,7 @@ export default function ClientesPage() {
             : null,
           createdAt: apiClient.createdAt,
           updatedAt: apiClient.updatedAt,
+          isAssigned: !!apiClient.contador,
         }))
 
         setClients(mappedClients)

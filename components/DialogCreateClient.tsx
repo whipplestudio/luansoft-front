@@ -13,10 +13,21 @@ import { toast } from "sonner"
 import axiosInstance from "@/api/config"
 import axios from "axios"
 import { Loader2 } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { getActiveRegimenesFiscales } from "@/src/regimen-fiscal/regimen-fiscal.service"
+
+// Define the RegimenFiscal interface
+interface RegimenFiscal {
+  id: string
+  nombre: string
+  descripcion: string
+  status: "ACTIVE" | "INACTIVE"
+}
 
 const clientSchema = z.object({
   company: z.string().min(1, "La empresa es requerida"),
   type: z.enum(["FISICA", "MORAL"]),
+  regimenFiscalId: z.string().min(1, "El régimen fiscal es requerido"),
 })
 
 type ClientFormData = z.infer<typeof clientSchema>
@@ -26,6 +37,7 @@ interface Client {
   company: string
   type: "FISICA" | "MORAL"
   status: "ACTIVE" | "INACTIVE"
+  regimenFiscalId?: string
 }
 
 interface DialogCreateClientProps {
@@ -37,6 +49,8 @@ interface DialogCreateClientProps {
 
 export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: DialogCreateClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [regimenesFiscales, setRegimenesFiscales] = useState<RegimenFiscal[]>([])
+  const [isLoadingRegimenes, setIsLoadingRegimenes] = useState(false)
 
   const {
     control,
@@ -48,19 +62,46 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
     defaultValues: {
       company: "",
       type: "FISICA",
+      regimenFiscalId: "",
     },
   })
+
+  // Fetch active tax regimes
+  const fetchRegimenesFiscales = async () => {
+    setIsLoadingRegimenes(true)
+    try {
+      const response = await getActiveRegimenesFiscales()
+      if (response.success) {
+        setRegimenesFiscales(response.data)
+      } else {
+        toast.error("Error al cargar los regímenes fiscales")
+      }
+    } catch (error) {
+      console.error("Error fetching regimenes fiscales:", error)
+      toast.error("Error al cargar los regímenes fiscales")
+    } finally {
+      setIsLoadingRegimenes(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchRegimenesFiscales()
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (isOpen && client) {
       reset({
         company: client.company,
         type: client.type,
+        regimenFiscalId: client.regimenFiscalId || "",
       })
     } else if (isOpen) {
       reset({
         company: "",
         type: "FISICA",
+        regimenFiscalId: "",
       })
     }
   }, [isOpen, client, reset])
@@ -139,6 +180,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
     reset({
       company: "",
       type: "FISICA",
+      regimenFiscalId: "",
     })
     onOpenChange(false)
   }
@@ -174,6 +216,27 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
             />
             {errors.type && <p className="text-red-500 text-sm">{errors.type.message}</p>}
           </div>
+          <div>
+            <Label htmlFor="regimenFiscalId">Régimen Fiscal</Label>
+            <Controller
+              name="regimenFiscalId"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  placeholder="Seleccionar régimen fiscal"
+                  // isLoading={isLoadingRegimenes} // Removed as it's not supported
+                  options={regimenesFiscales.map((regimen) => ({
+                    label: regimen.nombre,
+                    value: regimen.id,
+                    description: regimen.descripcion,
+                  }))}
+                  selected={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+            {errors.regimenFiscalId && <p className="text-red-500 text-sm">{errors.regimenFiscalId.message}</p>}
+          </div>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? (
               <>
@@ -191,4 +254,3 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
     </Dialog>
   )
 }
-
