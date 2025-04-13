@@ -22,8 +22,18 @@ import axiosInstance from "@/api/config"
 import { debounce } from "@/utils/debounce"
 import { toast } from "sonner"
 import axios from "axios"
+import { hasPermission, type RoleType } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 export default function ContadoresPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [contadores, setContadores] = useState<Contador[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
@@ -199,6 +209,10 @@ export default function ContadoresPage() {
       id: "actions",
       cell: ({ row }) => {
         const contador = row.original
+        const role = userRole as RoleType | null
+        const canEdit = hasPermission(role, "contadores", "edit")
+        const canDelete = hasPermission(role, "contadores", "delete")
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -209,14 +223,16 @@ export default function ContadoresPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleEdit(contador)
-                }}
-              >
-                Editar
-              </DropdownMenuItem>
+              {canEdit && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleEdit(contador)
+                  }}
+                >
+                  Editar
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation()
@@ -225,7 +241,7 @@ export default function ContadoresPage() {
               >
                 Ver detalles
               </DropdownMenuItem>
-              {contador.status === "active" && (
+              {canDelete && contador.status === "active" && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation()
@@ -249,59 +265,62 @@ export default function ContadoresPage() {
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <Toaster />
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Catálogo de Contadores</h1>
-        <Button
-          onClick={() => {
-            setSelectedContador(null)
-            setDialogMode("create")
-            setIsDialogOpen(true)
+    <ProtectedRoute resource="contadores" action="view" redirectTo="/">
+      <div className="container mx-auto py-10">
+        <Toaster />
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Catálogo de Contadores</h1>
+          {hasPermission(userRole as RoleType, "contadores", "create") && (
+            <Button
+              onClick={() => {
+                setSelectedContador(null)
+                setDialogMode("create")
+                setIsDialogOpen(true)
+              }}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Agregar Contador
+            </Button>
+          )}
+        </div>
+        <DataTable
+          columns={columns}
+          data={contadores}
+          isLoading={isLoading}
+          pagination={{
+            pageCount: pagination.totalPages,
+            page: pagination.page,
+            onPageChange: handlePageChange,
+            perPage: pagination.limit,
+            onPerPageChange: handleLimitChange,
           }}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" /> Agregar Contador
-        </Button>
+          searchValue={filter}
+          onSearchChange={handleFilterChange}
+        />
+
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{dialogMode === "create" ? "Agregar Nuevo Contador" : "Editar Contador"}</DialogTitle>
+            </DialogHeader>
+            <ContadorForm onSuccess={handleNewContadorSuccess} contador={selectedContador || undefined} />
+          </DialogContent>
+        </Dialog>
+
+        <ContadorDetailsDialog
+          isOpen={isDetailsDialogOpen}
+          onClose={() => setIsDetailsDialogOpen(false)}
+          contador={selectedContador}
+        />
+
+        <ConfirmationDialog
+          isOpen={isConfirmDialogOpen}
+          onClose={handleCloseConfirmDialog}
+          onConfirm={confirmDelete}
+          title="Eliminar Contador"
+          description="¿Estás seguro de que quieres eliminar este contador? Esta acción no se puede deshacer."
+          confirmationWord="ELIMINAR"
+        />
       </div>
-      <DataTable
-        columns={columns}
-        data={contadores}
-        isLoading={isLoading}
-        pagination={{
-          pageCount: pagination.totalPages,
-          page: pagination.page,
-          onPageChange: handlePageChange,
-          perPage: pagination.limit,
-          onPerPageChange: handleLimitChange,
-        }}
-        searchValue={filter}
-        onSearchChange={handleFilterChange}
-      />
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{dialogMode === "create" ? "Agregar Nuevo Contador" : "Editar Contador"}</DialogTitle>
-          </DialogHeader>
-          <ContadorForm onSuccess={handleNewContadorSuccess} contador={selectedContador || undefined} />
-        </DialogContent>
-      </Dialog>
-
-      <ContadorDetailsDialog
-        isOpen={isDetailsDialogOpen}
-        onClose={() => setIsDetailsDialogOpen(false)}
-        contador={selectedContador}
-      />
-
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        onClose={handleCloseConfirmDialog}
-        onConfirm={confirmDelete}
-        title="Eliminar Contador"
-        description="¿Estás seguro de que quieres eliminar este contador? Esta acción no se puede deshacer."
-        confirmationWord="ELIMINAR"
-      />
-    </div>
+    </ProtectedRoute>
   )
 }
-

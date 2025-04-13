@@ -81,6 +81,15 @@ export function UploadPaymentProofDialog({ isOpen, onClose, onUpload, isUploadin
 
     try {
       await onUpload(selectedFile)
+      // Limpiar el estado después de una subida exitosa
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      setFileType(null)
+      setPreviewError(false)
+      setIsPreviewLoading(false)
     } catch (error) {
       console.error("Error al subir el archivo:", error)
     }
@@ -93,6 +102,8 @@ export function UploadPaymentProofDialog({ isOpen, onClose, onUpload, isUploadin
     setSelectedFile(null)
     setPreviewUrl(null)
     setFileType(null)
+    setPreviewError(false)
+    setIsPreviewLoading(false)
     onClose()
   }
 
@@ -117,6 +128,20 @@ export function UploadPaymentProofDialog({ isOpen, onClose, onUpload, isUploadin
   const handlePreviewLoadSuccess = () => {
     setIsPreviewLoading(false)
   }
+
+  useEffect(() => {
+    // Limpiar el estado cuando el modal se cierra
+    if (!isOpen) {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+      setSelectedFile(null)
+      setPreviewUrl(null)
+      setFileType(null)
+      setPreviewError(false)
+      setIsPreviewLoading(false)
+    }
+  }, [isOpen, previewUrl])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>

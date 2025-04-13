@@ -30,14 +30,19 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-// Añadir la importación del nuevo componente al principio del archivo, junto con las otras importaciones
 import { UploadPaymentProofDialog } from "@/components/UploadPaymentProofDialog"
-
-// Buscar el import de MultiSelect
-// import { SearchableSelect } from "@/components/ui/searchable-select"
+import { hasPermission, type RoleType, getLoggedContadorId } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 export default function AsignarProcesosPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [assignments, setAssignments] = useState<ProcessAssignment[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<string>("")
@@ -85,7 +90,13 @@ export default function AsignarProcesosPage() {
         throw new Error("No authentication token found")
       }
 
+      // Obtener el ID del contador si el usuario es un contador
+      const contadorId = userRole === "contador" ? getLoggedContadorId() : null
+
       const response = await axiosInstance.get("/client/active", {
+        params: {
+          contadorId: contadorId || undefined, // Enviar contadorId si el usuario es contador
+        },
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -115,7 +126,7 @@ export default function AsignarProcesosPage() {
       console.error("Error fetching active clients:", error)
       toast.error("Error al cargar los clientes activos")
     }
-  }, [])
+  }, [userRole])
 
   // Función para obtener los procesos desde la API
   const fetchProcesses = useCallback(async () => {
@@ -149,96 +160,204 @@ export default function AsignarProcesosPage() {
   // Modificar la función fetchClientsWithProcesses para adaptarla a la nueva estructura de respuesta de la API
   // Reemplazar la implementación actual de fetchClientsWithProcesses con esta nueva versión:
 
-  const fetchClientsWithProcesses = useCallback(async (page = 1, limit = 10, clientId?: string, processId?: string) => {
-    setIsLoading(true)
+  const fetchClientsWithProcesses = useCallback(
+    async (page = 1, limit = 10, clientId?: string, processId?: string) => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No authentication token found")
+        }
+
+        // Construir los parámetros de la consulta
+        const params: Record<string, any> = {
+          page,
+          limit,
+        }
+
+        // Añadir clientId a los parámetros si está definido
+        if (clientId) {
+          params.clientId = clientId
+        }
+
+        // Añadir processId a los parámetros si está definido
+        if (processId) {
+          params.processId = processId
+        }
+
+        // Obtener el ID del contador si el usuario es un contador
+        const contadorId = userRole === "contador" ? getLoggedContadorId() : null
+        if (contadorId) {
+          params.contadorId = contadorId
+        }
+
+        const response = await axiosInstance.get("/client/with-processes", {
+          params,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.data.success) {
+          const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
+
+          // Extraer los clientes únicos de las asignaciones
+          const uniqueClients = new Map<string, Client>()
+
+          data.forEach((assignment: any) => {
+            if (assignment.client && !uniqueClients.has(assignment.client.id)) {
+              uniqueClients.set(assignment.client.id, {
+                id: assignment.client.id,
+                company: assignment.client.company,
+                type: assignment.client.type,
+                status: assignment.client.status,
+                regimenFiscalId: assignment.client.regimenFiscalId || null,
+                contador: assignment.client.contador || null,
+                contacto: assignment.client.contacto || null,
+                isAssigned: assignment.client.isAssigned || false,
+                createdAt: assignment.client.createdAt || "",
+                updatedAt: assignment.client.updatedAt || "",
+              })
+            }
+          })
+
+          // Mapear las asignaciones de procesos directamente desde la respuesta
+          const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
+            id: assignment.id,
+            clientId: assignment.clientId,
+            processId: assignment.processId,
+            commitmentDate: assignment.date,
+            status: assignment.status,
+            graceDays: assignment.graceDays,
+            payrollFrequencies: assignment.payrollFrequencies || [],
+            paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
+            process: {
+              id: assignment.process.id,
+              name: assignment.process.name,
+              description: assignment.process.description,
+              progress: 0,
+              createdAt: assignment.process.createdAt,
+              updatedAt: assignment.process.updatedAt,
+            },
+          }))
+
+          setClients(Array.from(uniqueClients.values()))
+          setAssignments(assignmentsData)
+          setPagination({
+            page: currentPage || 1,
+            limit: pageLimit || 10,
+            total: total || 0,
+            totalPages: totalPages || 1,
+          })
+        } else {
+          throw new Error(response.data.message || "Error fetching clients with processes")
+        }
+      } catch (error) {
+        console.error("Error fetching clients with processes:", error)
+        toast.error("Error al cargar los clientes con procesos")
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [userRole],
+  )
+
+  // Buscar la función fetchUnassignedClients y modificarla para incluir el contadorId cuando el usuario es un contador
+  const fetchUnassignedClients = useCallback(async () => {
     try {
       const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
+      if (!token) throw new Error("No authentication token found")
+
+      // Construir la URL con los parámetros
+      let url = "/assignment/unassigned-clients/contador"
+
+      // Añadir contadorId si el usuario es un contador
+      const userRole = localStorage.getItem("userRole")
+      if (userRole === "contador") {
+        const userData = localStorage.getItem("user")
+        if (userData) {
+          const user = JSON.parse(userData)
+          if (user.id) {
+            url += `?contadorId=${user.id}`
+          }
+        }
       }
 
-      // Construir los parámetros de la consulta
-      const params: Record<string, any> = {
-        page,
-        limit,
-      }
-
-      // Añadir clientId a los parámetros si está definido
-      if (clientId) {
-        params.clientId = clientId
-      }
-
-      // Añadir processId a los parámetros si está definido
-      if (processId) {
-        params.processId = processId
-      }
-
-      const response = await axiosInstance.get("/client/with-processes", {
-        params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const response = await axiosInstance.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.data.success) {
-        const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
-
-        // Extraer los clientes únicos de las asignaciones
-        const uniqueClients = new Map<string, Client>()
-
-        data.forEach((assignment: any) => {
-          if (assignment.client && !uniqueClients.has(assignment.client.id)) {
-            uniqueClients.set(assignment.client.id, {
-              id: assignment.client.id,
-              company: assignment.client.company,
-              type: assignment.client.type,
-              status: assignment.client.status,
-              regimenFiscalId: assignment.client.regimenFiscalId || null,
-              contador: assignment.client.contador || null,
-              contacto: assignment.client.contacto || null,
-              isAssigned: assignment.client.isAssigned || false,
-              createdAt: assignment.client.createdAt || "",
-              updatedAt: assignment.client.updatedAt || "",
-            })
-          }
-        })
-
-        // Mapear las asignaciones de procesos directamente desde la respuesta
-        const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
-          id: assignment.id,
-          clientId: assignment.clientId,
-          processId: assignment.processId,
-          commitmentDate: assignment.date,
-          status: assignment.status,
-          graceDays: assignment.graceDays,
-          payrollFrequencies: assignment.payrollFrequencies || [],
-          paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
-          process: {
-            id: assignment.process.id,
-            name: assignment.process.name,
-            description: assignment.process.description,
-            progress: 0,
-            createdAt: assignment.process.createdAt,
-            updatedAt: assignment.process.updatedAt,
-          },
+        const mappedClients = response.data.data.map((client: any) => ({
+          id: client.id,
+          name: client.company, // Usar company como nombre
+          company: client.company,
+          type: client.type,
+          isAssigned: !!client.contadorId,
+          status: client.status,
+          processes: [],
+          razonSocial: client.company,
         }))
-
-        setClients(Array.from(uniqueClients.values()))
-        setAssignments(assignmentsData)
-        setPagination({
-          page: currentPage || 1,
-          limit: pageLimit || 10,
-          total: total || 0,
-          totalPages: totalPages || 1,
-        })
+        console.log("Unassigned clients fetched:", mappedClients)
+        //setUnassignedClients(mappedClients)
       } else {
-        throw new Error(response.data.message || "Error fetching clients with processes")
+        throw new Error(response.data.message || "Error fetching unassigned clients")
       }
     } catch (error) {
-      console.error("Error fetching clients with processes:", error)
-      toast.error("Error al cargar los clientes con procesos")
+      console.error("Error fetching unassigned clients:", error)
+      toast.error("Error al cargar los clientes no asignados")
     } finally {
       setIsLoading(false)
+    }
+  }, [])
+
+  // Buscar la función fetchAssignedClients y modificarla para incluir el contadorId cuando el usuario es un contador
+  const fetchAssignedClients = useCallback(async (contadorId: string) => {
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) throw new Error("No authentication token found")
+
+      // Construir la URL con los parámetros
+      let url = `/assignment/assigned-clients/contador/${contadorId}`
+
+      // Añadir contadorId adicional si el usuario es un contador
+      const userRole = localStorage.getItem("userRole")
+      if (userRole === "contador") {
+        const userData = localStorage.getItem("user")
+        if (userData) {
+          const user = JSON.parse(userData)
+          if (user.id) {
+            // Solo añadir el parámetro si el contadorId seleccionado no es el mismo que el del usuario
+            if (contadorId !== user.id) {
+              url += `?contadorId=${user.id}`
+            }
+          }
+        }
+      }
+
+      const response = await axiosInstance.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (response.data.success) {
+        const mappedClients = response.data.data.map((client: any) => ({
+          id: client.id,
+          name: client.company,
+          company: client.company,
+          type: client.type,
+          isAssigned: !!client.contadorId,
+          status: client.status,
+          processes: [],
+          razonSocial: client.company,
+        }))
+        console.log("Assigned clients fetched:", mappedClients)
+        //setAssignedClients(mappedClients)
+      } else {
+        throw new Error(response.data.message || "Error fetching assigned clients")
+      }
+    } catch (error) {
+      console.error("Error fetching assigned clients:", error)
+      toast.error("Error al cargar los clientes asignados")
     }
   }, [])
 
@@ -584,7 +703,7 @@ export default function AsignarProcesosPage() {
   // Primero, añadamos la función para marcar un proceso como pagado después de la función handleActivateProcess
   // Añadir después de la función handleActivateProcess
 
-  // Reemplazar la función handleMarkAsPaid existente con esta nueva implementación
+  // Reemplazar la función handleMarkAsPaid existente with this new implementation
   const handleMarkAsPaid = (assignment: ProcessAssignment) => {
     setProcessingAssignment(assignment)
     setIsUploadDialogOpen(true)
@@ -623,7 +742,7 @@ export default function AsignarProcesosPage() {
         // Recargar los datos para asegurar que todo está sincronizado
         fetchClientsWithProcesses(pagination.page, pagination.limit, selectedClient, selectedProcess)
 
-        // Cerrar el diálogo
+        // Cerrar el diálogo y limpiar el estado
         setIsUploadDialogOpen(false)
         setProcessingAssignment(null)
       } else {
@@ -756,6 +875,9 @@ export default function AsignarProcesosPage() {
         const assignment = row.original
         const isActive = assignment.status === "ACTIVE"
         const isPaid = assignment.status === "PAID"
+        const role = userRole as RoleType | null
+        const canEdit = hasPermission(role, "asignar-procesos", "edit")
+        const canDelete = hasPermission(role, "asignar-procesos", "delete")
 
         return (
           <DropdownMenu>
@@ -767,7 +889,7 @@ export default function AsignarProcesosPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              {isActive && (
+              {isActive && canEdit && (
                 <>
                   <DropdownMenuItem onClick={() => handleEdit(assignment)} className="text-blue-600">
                     Editar Proceso
@@ -777,7 +899,7 @@ export default function AsignarProcesosPage() {
                   </DropdownMenuItem>
                 </>
               )}
-              {isActive ? (
+              {isActive && canDelete ? (
                 <DropdownMenuItem onClick={() => handleDelete(assignment)} className="text-red-600">
                   Eliminar Asignación
                 </DropdownMenuItem>
@@ -786,9 +908,11 @@ export default function AsignarProcesosPage() {
                   Proceso completado
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={() => handleActivateProcess(assignment)} className="text-green-600">
-                  Activar Proceso
-                </DropdownMenuItem>
+                canEdit && (
+                  <DropdownMenuItem onClick={() => handleActivateProcess(assignment)} className="text-green-600">
+                    Activar Proceso
+                  </DropdownMenuItem>
+                )
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -803,308 +927,311 @@ export default function AsignarProcesosPage() {
   const isConfirming = isDeleting
 
   return (
-    <div className="container mx-auto py-10">
-      <Toaster />
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Asignación de Procesos</h1>
-        <Button onClick={() => setIsDialogOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Asignar Proceso
-        </Button>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Filtro por Cliente */}
-        <div>
-          <label className="block text-sm font-medium mb-2">Filtrar por Cliente</label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-between">
-                {selectedClient
-                  ? allActiveClients.find((c) => c.id === selectedClient)?.company || "Cliente seleccionado"
-                  : "Todos los clientes"}
-                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0">
-              <Command>
-                <CommandInput placeholder="Buscar cliente..." />
-                <CommandList className="max-h-[300px] overflow-y-auto">
-                  <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => handleClientChange("")} className="cursor-pointer">
-                      Todos los clientes
-                    </CommandItem>
-                    {allActiveClients.map((client) => (
-                      <CommandItem
-                        key={client.id}
-                        onSelect={() => handleClientChange(client.id)}
-                        className="cursor-pointer"
-                      >
-                        {client.company}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+    <ProtectedRoute resource="asignar-procesos" action="view" redirectTo="/">
+      <div className="container mx-auto py-10">
+        <Toaster />
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Asignación de Procesos</h1>
+          {hasPermission(userRole as RoleType, "asignar-procesos", "create") && (
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Asignar Proceso
+            </Button>
+          )}
         </div>
-
-        {/* Filtro por Proceso */}
-        <div>
-          <label className="block text-sm font-medium mb-2">Filtrar por Proceso</label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full justify-between">
-                {selectedProcess
-                  ? processes.find((p) => p.id === selectedProcess)?.name || "Proceso seleccionado"
-                  : "Todos los procesos"}
-                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0">
-              <Command>
-                <CommandInput placeholder="Buscar proceso..." />
-                <CommandList className="max-h-[300px] overflow-y-auto">
-                  <CommandEmpty>No se encontraron procesos.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem onSelect={() => handleProcessChange("")} className="cursor-pointer">
-                      Todos los procesos
-                    </CommandItem>
-                    {processes.map((process) => (
-                      <CommandItem
-                        key={process.id}
-                        onSelect={() => handleProcessChange(process.id)}
-                        className="cursor-pointer"
-                      >
-                        {process.name}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {/* Filtro por Cliente */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Filtrar por Cliente</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {selectedClient
+                    ? allActiveClients.find((c) => c.id === selectedClient)?.company || "Cliente seleccionado"
+                    : "Todos los clientes"}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar cliente..." />
+                  <CommandList className="max-h-[300px] overflow-y-auto">
+                    <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => handleClientChange("")} className="cursor-pointer">
+                        Todos los clientes
                       </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-      <DataTable
-        columns={columns}
-        data={assignments}
-        isLoading={isLoading}
-        hideSearchInput={true}
-        pagination={{
-          pageCount: pagination.totalPages,
-          page: pagination.page,
-          onPageChange: handlePageChange,
-          perPage: pagination.limit,
-          onPerPageChange: handleLimitChange,
-        }}
-      />
-      {/* Diálogo para asignar proceso */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Asignar Proceso a Cliente</DialogTitle>
-          </DialogHeader>
-          <AssignProcessForm
-            onSuccess={handleAssignProcessSuccess}
-            onCancel={() => setIsDialogOpen(false)}
-            clients={allActiveClients}
-            processes={processes}
-            existingAssignments={assignments}
-          />
-        </DialogContent>
-      </Dialog>
-      {/* Diálogo para editar fecha de compromiso */}
-      <Dialog
-        open={isEditDialogOpen}
-        onOpenChange={(open) => {
-          setIsEditDialogOpen(open)
-          if (!open) {
-            setAssignmentToEdit(null)
-            setNewCommitmentDate(undefined)
-            setNewGraceDays(undefined)
-            setNewPayrollFrequencies([])
-            setNewPaymentPeriod("MONTHLY")
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Editar Proceso</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            {assignmentToEdit && (
-              <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Cliente:</Label>
-                  <div className="col-span-3">
-                    {clients.find((c) => c.id === assignmentToEdit.clientId)?.company || "Cliente no encontrado"}
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Proceso:</Label>
-                  <div className="col-span-3">{assignmentToEdit.process.name}</div>
-                </div>
-
-                {/* Verificar si es un proceso de nómina */}
-                {assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
-                assignmentToEdit?.process.name.toLowerCase().trim() === "nomina" ? (
-                  // Mostrar opciones de frecuencia para procesos de nómina
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label className="text-right">Frecuencia:</Label>
-                    <div className="col-span-3 space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="quincenal"
-                          checked={newPayrollFrequencies.includes("QUINCENAL")}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setNewPayrollFrequencies((prev) => [...prev, "QUINCENAL"])
-                            } else {
-                              setNewPayrollFrequencies((prev) => prev.filter((f) => f !== "QUINCENAL"))
-                            }
-                          }}
-                        />
-                        <Label htmlFor="quincenal">Quincenal</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="semanal"
-                          checked={newPayrollFrequencies.includes("SEMANAL")}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setNewPayrollFrequencies((prev) => [...prev, "SEMANAL"])
-                            } else {
-                              setNewPayrollFrequencies((prev) => prev.filter((f) => f !== "SEMANAL"))
-                            }
-                          }}
-                        />
-                        <Label htmlFor="semanal">Semanal</Label>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  // Mostrar campos de fecha y días de gracia para otros procesos
-                  <>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="commitmentDate" className="text-right">
-                        Fecha de Compromiso:
-                      </Label>
-                      <div className="col-span-3">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !newCommitmentDate && "text-muted-foreground",
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {newCommitmentDate ? (
-                                format(newCommitmentDate, "PPP", { locale: es })
-                              ) : (
-                                <span>Selecciona una fecha</span>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={newCommitmentDate}
-                              onSelect={setNewCommitmentDate}
-                              initialFocus
-                              locale={es}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="graceDays" className="text-right">
-                        Días de Gracia:
-                      </Label>
-                      <div className="col-span-3">
-                        <Input
-                          id="graceDays"
-                          type="number"
-                          min="0"
-                          value={newGraceDays !== undefined ? newGraceDays : 0}
-                          onChange={(e) => setNewGraceDays(Number(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="paymentPeriod" className="text-right">
-                        Período de Pago:
-                      </Label>
-                      <div className="col-span-3">
-                        <Select
-                          value={newPaymentPeriod}
-                          onValueChange={(value: "MONTHLY" | "ANNUAL") => setNewPaymentPeriod(value)}
+                      {allActiveClients.map((client) => (
+                        <CommandItem
+                          key={client.id}
+                          onSelect={() => handleClientChange(client.id)}
+                          className="cursor-pointer"
                         >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Seleccionar período" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="MONTHLY">Mensual</SelectItem>
-                            <SelectItem value="ANNUAL">Anual</SelectItem>
-                          </SelectContent>
-                        </Select>
+                          {client.company}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Filtro por Proceso */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Filtrar por Proceso</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between">
+                  {selectedProcess
+                    ? processes.find((p) => p.id === selectedProcess)?.name || "Proceso seleccionado"
+                    : "Todos los procesos"}
+                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar proceso..." />
+                  <CommandList className="max-h-[300px] overflow-y-auto">
+                    <CommandEmpty>No se encontraron procesos.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => handleProcessChange("")} className="cursor-pointer">
+                        Todos los procesos
+                      </CommandItem>
+                      {processes.map((process) => (
+                        <CommandItem
+                          key={process.id}
+                          onSelect={() => handleProcessChange(process.id)}
+                          className="cursor-pointer"
+                        >
+                          {process.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        </div>
+        <DataTable
+          columns={columns}
+          data={assignments}
+          isLoading={isLoading}
+          hideSearchInput={true}
+          pagination={{
+            pageCount: pagination.totalPages,
+            page: pagination.page,
+            onPageChange: handlePageChange,
+            perPage: pagination.limit,
+            onPerPageChange: handleLimitChange,
+          }}
+        />
+        {/* Diálogo para asignar proceso */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Asignar Proceso a Cliente</DialogTitle>
+            </DialogHeader>
+            <AssignProcessForm
+              onSuccess={handleAssignProcessSuccess}
+              onCancel={() => setIsDialogOpen(false)}
+              clients={allActiveClients}
+              processes={processes}
+              existingAssignments={assignments}
+            />
+          </DialogContent>
+        </Dialog>
+        {/* Diálogo para editar fecha de compromiso */}
+        <Dialog
+          open={isEditDialogOpen}
+          onOpenChange={(open) => {
+            setIsEditDialogOpen(open)
+            if (!open) {
+              setAssignmentToEdit(null)
+              setNewCommitmentDate(undefined)
+              setNewGraceDays(undefined)
+              setNewPayrollFrequencies([])
+              setNewPaymentPeriod("MONTHLY")
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Editar Proceso</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              {assignmentToEdit && (
+                <>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Cliente:</Label>
+                    <div className="col-span-3">
+                      {clients.find((c) => c.id === assignmentToEdit.clientId)?.company || "Cliente no encontrado"}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right">Proceso:</Label>
+                    <div className="col-span-3">{assignmentToEdit.process.name}</div>
+                  </div>
+
+                  {/* Verificar si es un proceso de nómina */}
+                  {assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
+                  assignmentToEdit?.process.name.toLowerCase().trim() === "nomina" ? (
+                    // Mostrar opciones de frecuencia para procesos de nómina
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right">Frecuencia:</Label>
+                      <div className="col-span-3 space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="quincenal"
+                            checked={newPayrollFrequencies.includes("QUINCENAL")}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setNewPayrollFrequencies((prev) => [...prev, "QUINCENAL"])
+                              } else {
+                                setNewPayrollFrequencies((prev) => prev.filter((f) => f !== "QUINCENAL"))
+                              }
+                            }}
+                          />
+                          <Label htmlFor="quincenal">Quincenal</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="semanal"
+                            checked={newPayrollFrequencies.includes("SEMANAL")}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setNewPayrollFrequencies((prev) => [...prev, "SEMANAL"])
+                              } else {
+                                setNewPayrollFrequencies((prev) => prev.filter((f) => f !== "SEMANAL"))
+                              }
+                            }}
+                          />
+                          <Label htmlFor="semanal">Semanal</Label>
+                        </div>
                       </div>
                     </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsEditDialogOpen(false)
-                setAssignmentToEdit(null)
-                setNewCommitmentDate(undefined)
-                setNewGraceDays(undefined)
-                setNewPayrollFrequencies([])
-                setNewPaymentPeriod("MONTHLY")
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleUpdateCommitmentDate}
-              disabled={
-                isUpdating ||
-                (assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
-                assignmentToEdit?.process.name.toLowerCase().trim() === "nomina"
-                  ? newPayrollFrequencies.length === 0
-                  : !newCommitmentDate)
-              }
-            >
-              {isUpdating ? "Actualizando..." : "Actualizar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Diálogo de confirmación para eliminar */}
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        onClose={() => setIsConfirmDialogOpen(false)}
-        onConfirm={confirmDelete}
-        title={title}
-        description={description}
-        confirmationWord={confirmationWord}
-        isConfirming={isConfirming}
-      />
-      <UploadPaymentProofDialog
-        isOpen={isUploadDialogOpen}
-        onClose={() => setIsUploadDialogOpen(false)}
-        onUpload={uploadPaymentProofAndMarkAsPaid}
-        isUploading={isUploading}
-      />
-    </div>
+                  ) : (
+                    // Mostrar campos de fecha y días de gracia para otros procesos
+                    <>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="commitmentDate" className="text-right">
+                          Fecha de Compromiso:
+                        </Label>
+                        <div className="col-span-3">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !newCommitmentDate && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {newCommitmentDate ? (
+                                  format(newCommitmentDate, "PPP", { locale: es })
+                                ) : (
+                                  <span>Selecciona una fecha</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={newCommitmentDate}
+                                onSelect={setNewCommitmentDate}
+                                initialFocus
+                                locale={es}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="graceDays" className="text-right">
+                          Días de Gracia:
+                        </Label>
+                        <div className="col-span-3">
+                          <Input
+                            id="graceDays"
+                            type="number"
+                            min="0"
+                            value={newGraceDays !== undefined ? newGraceDays : 0}
+                            onChange={(e) => setNewGraceDays(Number(e.target.value))}
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="paymentPeriod" className="text-right">
+                          Período de Pago:
+                        </Label>
+                        <div className="col-span-3">
+                          <Select
+                            value={newPaymentPeriod}
+                            onValueChange={(value: "MONTHLY" | "ANNUAL") => setNewPaymentPeriod(value)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Seleccionar período" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="MONTHLY">Mensual</SelectItem>
+                              <SelectItem value="ANNUAL">Anual</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsEditDialogOpen(false)
+                  setAssignmentToEdit(null)
+                  setNewCommitmentDate(undefined)
+                  setNewGraceDays(undefined)
+                  setNewPayrollFrequencies([])
+                  setNewPaymentPeriod("MONTHLY")
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleUpdateCommitmentDate}
+                disabled={
+                  isUpdating ||
+                  (assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
+                  assignmentToEdit?.process.name.toLowerCase().trim() === "nomina"
+                    ? newPayrollFrequencies.length === 0
+                    : !newCommitmentDate)
+                }
+              >
+                {isUpdating ? "Actualizando..." : "Actualizar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Diálogo de confirmación para eliminar */}
+        <ConfirmationDialog
+          isOpen={isConfirmDialogOpen}
+          onClose={() => setIsConfirmDialogOpen(false)}
+          onConfirm={confirmDelete}
+          title={title}
+          description={description}
+          confirmationWord={confirmationWord}
+          isConfirming={isConfirming}
+        />
+        <UploadPaymentProofDialog
+          isOpen={isUploadDialogOpen}
+          onClose={() => setIsUploadDialogOpen(false)}
+          onUpload={uploadPaymentProofAndMarkAsPaid}
+          isUploading={isUploading}
+        />
+      </div>
+    </ProtectedRoute>
   )
 }
-

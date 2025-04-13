@@ -20,8 +20,18 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { debounce } from "@/utils/debounce"
 import axiosInstance from "@/api/config"
+import { hasPermission, type RoleType } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 export default function ProcesosPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [processes, setProcesses] = useState<Process[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [selectedProcess, setSelectedProcess] = useState<Process | null>(null)
@@ -217,6 +227,7 @@ export default function ProcesosPage() {
     }
   }
 
+  // Buscar la definición de columnas y modificar la columna de acciones
   const columns: ColumnDef<Process>[] = [
     {
       accessorKey: "name",
@@ -246,6 +257,10 @@ export default function ProcesosPage() {
       id: "actions",
       cell: ({ row }) => {
         const process = row.original
+        const role = userRole as RoleType | null
+        const canEdit = hasPermission(role, "procesos", "edit")
+        const canDelete = hasPermission(role, "procesos", "delete")
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -256,10 +271,12 @@ export default function ProcesosPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => handleEdit(process)}>Editar</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDelete(process)} className="text-red-600">
-                Eliminar
-              </DropdownMenuItem>
+              {canEdit && <DropdownMenuItem onClick={() => handleEdit(process)}>Editar</DropdownMenuItem>}
+              {canDelete && (
+                <DropdownMenuItem onClick={() => handleDelete(process)} className="text-red-600">
+                  Eliminar
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -268,49 +285,53 @@ export default function ProcesosPage() {
   ]
 
   return (
-    <div className="container mx-auto py-10">
-      <Toaster />
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Catálogo de Procesos</h1>
-        <Button
-          onClick={() => {
-            setSelectedProcess(null)
-            setDialogMode("create")
-            setIsDialogOpen(true)
+    <ProtectedRoute resource="procesos" action="view" redirectTo="/">
+      <div className="container mx-auto py-10">
+        <Toaster />
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Catálogo de Procesos</h1>
+          {/* Mostrar el botón de agregar proceso solo si el usuario tiene permisos */}
+          {localStorage.getItem("userRole") !== "contador" && (
+            <Button
+              onClick={() => {
+                setSelectedProcess(null)
+                setDialogMode("create")
+                setIsDialogOpen(true)
+              }}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" /> Agregar Proceso
+            </Button>
+          )}
+        </div>
+        <DataTable
+          columns={columns}
+          data={processes}
+          isLoading={isLoading}
+          pagination={{
+            pageCount: pagination.totalPages,
+            page: pagination.page,
+            onPageChange: handlePageChange,
+            perPage: pagination.limit,
+            onPerPageChange: handleLimitChange,
           }}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" /> Agregar Proceso
-        </Button>
-      </div>
-      <DataTable
-        columns={columns}
-        data={processes}
-        isLoading={isLoading}
-        pagination={{
-          pageCount: pagination.totalPages,
-          page: pagination.page,
-          onPageChange: handlePageChange,
-          perPage: pagination.limit,
-          onPerPageChange: handleLimitChange,
-        }}
-        searchValue={searchTerm}
-        onSearchChange={handleFilterChange}
-        searchPlaceholder="Buscar por nombre de proceso..."
-      />
+          searchValue={searchTerm}
+          onSearchChange={handleFilterChange}
+          searchPlaceholder="Buscar por nombre de proceso..."
+        />
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{dialogMode === "create" ? "Agregar Nuevo Proceso" : "Editar Proceso"}</DialogTitle>
-          </DialogHeader>
-          <ProcessForm
-            onSuccess={handleNewProcessSuccess}
-            process={selectedProcess || undefined}
-            onCancel={() => setIsDialogOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
-    </div>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{dialogMode === "create" ? "Agregar Nuevo Proceso" : "Editar Proceso"}</DialogTitle>
+            </DialogHeader>
+            <ProcessForm
+              onSuccess={handleNewProcessSuccess}
+              process={selectedProcess || undefined}
+              onCancel={() => setIsDialogOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+    </ProtectedRoute>
   )
 }
-

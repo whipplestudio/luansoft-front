@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
 import { Filter, Eye, Download } from "lucide-react"
@@ -10,6 +10,8 @@ import { Toaster, toast } from "sonner"
 import { format } from "date-fns"
 import { axiosInstance } from "@/lib/axios"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
+import { getLoggedContadorId } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 // Interfaces para la respuesta de la API
 interface ProcessHistoryResponse {
@@ -230,6 +232,14 @@ const mockPdfUrl = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pd
 const mockImageUrl = "https://via.placeholder.com/800x600.png"
 
 export default function HistoricoProcesosPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [data, setData] = useState<CompletedProcess[]>([])
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10)
@@ -244,6 +254,7 @@ export default function HistoricoProcesosPage() {
   const [isLoadingProcesses, setIsLoadingProcesses] = useState(false)
   const [contadores, setContadores] = useState<ContadorItem[]>([])
   const [isLoadingContadores, setIsLoadingContadores] = useState(false)
+  const [preselectedContadorId, setPreselectedContadorId] = useState<string | null>(null)
 
   const [viewerOpen, setViewerOpen] = useState(false)
   const [currentDocument, setCurrentDocument] = useState<{
@@ -302,6 +313,19 @@ export default function HistoricoProcesosPage() {
 
       if (response.data.success) {
         setContadores(response.data.data.data)
+
+        // Si el usuario es un contador, preseleccionar su ID
+        if (userRole === "contador") {
+          const contadorId = getLoggedContadorId()
+          if (contadorId) {
+            setPreselectedContadorId(contadorId)
+            // Actualizar los filtros para incluir el contadorId preseleccionado
+            setFilters((prev) => ({
+              ...prev,
+              contadorIds: [contadorId],
+            }))
+          }
+        }
       } else {
         console.error("Error en la respuesta de la API de contadores:", response.data.message)
         toast.error("Error al cargar los contadores")
@@ -319,7 +343,7 @@ export default function HistoricoProcesosPage() {
     fetchActiveClients()
     fetchProcesses()
     fetchContadores()
-  }, [])
+  }, [userRole])
 
   // Función para cerrar el visor de documentos
   const handleCloseViewer = () => {
@@ -440,13 +464,20 @@ export default function HistoricoProcesosPage() {
 
   const handleApiError = () => {
     setUseLocalData(true)
+    setData(mockCompletedProcesses)
+    toast.warn("No se pudo conectar con la API. Usando datos locales para demostración.")
   }
 
   // Actualizar la función fetchProcessHistory para usar los nombres correctos de parámetros de fecha
-  const fetchProcessHistory = async (page: number, limit: number, filters: Filters) => {
+  const fetchProcessHistory = useCallback(async (page = 1, limit = 10, filters = {}) => {
     setIsLoading(true)
     try {
-      // Crear URLSearchParams para construir la URL con el formato correcto
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No authentication token found")
+      }
+
+      // Construir URLSearchParams para construir la URL con el formato correcto
       const searchParams = new URLSearchParams()
       searchParams.append("page", page.toString())
       searchParams.append("limit", limit.toString())
@@ -458,7 +489,19 @@ export default function HistoricoProcesosPage() {
         })
       }
 
-      if (filters.contadorIds && filters.contadorIds.length > 0) {
+      // Verificar si el usuario es un contador y añadir su ID como filtro
+      const userRole = localStorage.getItem("userRole")
+      if (userRole === "contador") {
+        const userData = localStorage.getItem("user")
+        if (userData) {
+          const user = JSON.parse(userData)
+          if (user.id) {
+            // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
+            searchParams.append("contadorId[]", user.id)
+          }
+        }
+      } else if (filters.contadorIds && filters.contadorIds.length > 0) {
+        // Si no es contador, usar los contadorIds de los filtros
         filters.contadorIds.forEach((id) => {
           searchParams.append("contadorId[]", id)
         })
@@ -513,12 +556,20 @@ export default function HistoricoProcesosPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   // Cargar datos iniciales
   useEffect(() => {
-    fetchProcessHistory(page, limit, filters)
-  }, [page, limit])
+    // Si el usuario es contador y tenemos su ID, incluirlo en los filtros iniciales
+    if (userRole === "contador" && preselectedContadorId) {
+      const initialFilters: Filters = {
+        contadorIds: [preselectedContadorId],
+      }
+      fetchProcessHistory(page, limit, initialFilters)
+    } else {
+      fetchProcessHistory(page, limit, filters)
+    }
+  }, [page, limit, preselectedContadorId, userRole, fetchProcessHistory])
 
   // Actualizar la función handleApplyFilters para usar los nombres correctos de parámetros de fecha
   const handleApplyFilters = (newFilters: any) => {
@@ -533,7 +584,10 @@ export default function HistoricoProcesosPage() {
       formattedFilters.clientIds = newFilters.clients
     }
 
-    if (newFilters.contadores && newFilters.contadores.length > 0) {
+    // Si el usuario es contador, siempre usar su ID como filtro
+    if (userRole === "contador" && preselectedContadorId) {
+      formattedFilters.contadorIds = [preselectedContadorId]
+    } else if (newFilters.contadores && newFilters.contadores.length > 0) {
       formattedFilters.contadorIds = newFilters.contadores
     }
 
@@ -564,119 +618,122 @@ export default function HistoricoProcesosPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <Toaster />
+    <ProtectedRoute resource="historico-procesos" action="view" redirectTo="/">
+      <div className="container mx-auto py-6">
+        <Toaster />
 
-      {currentDocument && (
-        <DocumentViewerModal
-          isOpen={viewerOpen}
-          onClose={handleCloseViewer}
-          documentUrl={currentDocument.url}
-          documentType={currentDocument.type}
-          title={currentDocument.title}
-          fileName={currentDocument.fileName}
-          onDownload={() => handleDownloadFile(currentDocument.fileId, currentDocument.fileName)}
-        />
-      )}
+        {currentDocument && (
+          <DocumentViewerModal
+            isOpen={viewerOpen}
+            onClose={handleCloseViewer}
+            documentUrl={currentDocument.url}
+            documentType={currentDocument.type}
+            title={currentDocument.title}
+            fileName={currentDocument.fileName}
+            onDownload={() => handleDownloadFile(currentDocument.fileId, currentDocument.fileName)}
+          />
+        )}
 
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Histórico de Procesos</h1>
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              Filtros avanzados
-            </Button>
-          </SheetTrigger>
-          <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Filtros avanzados</SheetTitle>
-              <SheetDescription>Filtra el histórico de procesos por diferentes criterios</SheetDescription>
-            </SheetHeader>
-            <HistoricoFiltros
-              onFilter={handleApplyFilters}
-              procesos={processes}
-              clientes={activeClients}
-              contadores={contadores}
-              isLoadingClients={isLoadingClients}
-              isLoadingProcesses={isLoadingProcesses}
-              isLoadingContadores={isLoadingContadores}
-            />
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      {useLocalData && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-          <p className="text-yellow-700">
-            Usando datos locales para demostración. La conexión con la API no está disponible.
-          </p>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Histórico de Procesos</h1>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4" />
+                Filtros avanzados
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>Filtros avanzados</SheetTitle>
+                <SheetDescription>Filtra el histórico de procesos por diferentes criterios</SheetDescription>
+              </SheetHeader>
+              <HistoricoFiltros
+                onFilter={handleApplyFilters}
+                procesos={processes}
+                clientes={activeClients}
+                contadores={contadores}
+                isLoadingClients={isLoadingClients}
+                isLoadingProcesses={isLoadingProcesses}
+                isLoadingContadores={isLoadingContadores}
+                preselectedContadorId={preselectedContadorId}
+                userRole={userRole}
+              />
+            </SheetContent>
+          </Sheet>
         </div>
-      )}
 
-      <DataTable
-        columns={[
-          {
-            accessorKey: "clientName",
-            header: "Cliente",
-          },
-          {
-            accessorKey: "processName",
-            header: "Proceso",
-          },
-          {
-            accessorKey: "contadorName",
-            header: "Contador",
-          },
-          {
-            accessorKey: "completedDate",
-            header: "Fecha de Completado",
-          },
-          {
-            accessorKey: "originalDueDate",
-            header: "Fecha Original",
-          },
-          {
-            id: "actions",
-            header: "Acciones",
-            cell: ({ row }) => {
-              const process = row.original
+        {useLocalData && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+            <p className="text-yellow-700">
+              Usando datos locales para demostración. La conexión con la API no está disponible.
+            </p>
+          </div>
+        )}
 
-              return (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleViewFile(process.fileId, process.fileName)}
-                    title="Ver documento"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDownloadFile(process.fileId, process.fileName)}
-                    title="Descargar documento"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-              )
+        <DataTable
+          columns={[
+            {
+              accessorKey: "clientName",
+              header: "Cliente",
             },
-          },
-        ]}
-        data={data}
-        isLoading={isLoading}
-        pagination={{
-          pageCount: totalPages,
-          page: page,
-          onPageChange: handlePageChange,
-          perPage: limit,
-          onPerPageChange: handleLimitChange,
-        }}
-        hideSearchInput={true}
-      />
-    </div>
+            {
+              accessorKey: "processName",
+              header: "Proceso",
+            },
+            {
+              accessorKey: "contadorName",
+              header: "Contador",
+            },
+            {
+              accessorKey: "completedDate",
+              header: "Fecha de Completado",
+            },
+            {
+              accessorKey: "originalDueDate",
+              header: "Fecha Original",
+            },
+            {
+              id: "actions",
+              header: "Acciones",
+              cell: ({ row }) => {
+                const process = row.original
+
+                return (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleViewFile(process.fileId, process.fileName)}
+                      title="Ver documento"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDownloadFile(process.fileId, process.fileName)}
+                      title="Descargar documento"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )
+              },
+            },
+          ]}
+          data={data}
+          isLoading={isLoading}
+          pagination={{
+            pageCount: totalPages,
+            page: page,
+            onPageChange: handlePageChange,
+            perPage: limit,
+            onPerPageChange: handleLimitChange,
+          }}
+          hideSearchInput={true}
+        />
+      </div>
+    </ProtectedRoute>
   )
 }
-

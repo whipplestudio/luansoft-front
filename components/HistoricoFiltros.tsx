@@ -10,8 +10,9 @@ import { CalendarIcon } from "lucide-react"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { cn } from "@/lib/utils"
-import { SearchableSelect, type SelectOption } from "@/components/ui/searchable-select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useState, useEffect } from "react"
 
 const formSchema = z.object({
   startDate: z.date().optional(),
@@ -31,6 +32,7 @@ interface HistoricoFiltrosProps {
   isLoadingContadores?: boolean
 }
 
+// Modificar el componente para ocultar el selector de contadores cuando el usuario es un contador
 export function HistoricoFiltros({
   onFilter,
   procesos,
@@ -40,6 +42,23 @@ export function HistoricoFiltros({
   isLoadingProcesses = false,
   isLoadingContadores = false,
 }: HistoricoFiltrosProps) {
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+
+  // Obtener el rol y el ID del usuario al cargar el componente
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+
+    const userData = localStorage.getItem("user")
+    if (userData) {
+      const user = JSON.parse(userData)
+      if (user.id) {
+        setUserId(user.id)
+      }
+    }
+  }, [])
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -50,6 +69,17 @@ export function HistoricoFiltros({
       contadores: [],
     },
   })
+
+  // Preseleccionar el contador logueado si el usuario es un contador
+  useEffect(() => {
+    if (userRole === "contador" && userId) {
+      // Buscar el contador correspondiente al usuario
+      const contadorFound = contadores.find((contador) => contador.id === userId)
+      if (contadorFound) {
+        form.setValue("contadores", [contadorFound.id])
+      }
+    }
+  }, [userRole, userId, contadores, form])
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     // Convertir los arrays vacíos a undefined para el filtrado
@@ -63,31 +93,33 @@ export function HistoricoFiltros({
   }
 
   function handleReset() {
-    form.reset({
-      startDate: undefined,
-      endDate: undefined,
-      processes: [],
-      clients: [],
-      contadores: [],
-    })
-    onFilter({})
+    // Si el usuario es un contador, mantener preseleccionado su ID al resetear
+    if (userRole === "contador" && userId) {
+      const contadorFound = contadores.find((contador) => contador.id === userId)
+      if (contadorFound) {
+        form.reset({
+          startDate: undefined,
+          endDate: undefined,
+          processes: [],
+          clients: [],
+          contadores: [contadorFound.id],
+        })
+        onFilter({ contadores: [contadorFound.id] })
+      } else {
+        form.reset()
+        onFilter({})
+      }
+    } else {
+      form.reset({
+        startDate: undefined,
+        endDate: undefined,
+        processes: [],
+        clients: [],
+        contadores: [],
+      })
+      onFilter({})
+    }
   }
-
-  // Convertir los datos a formato de opciones para SearchableSelect
-  const procesosOptions: SelectOption[] = procesos.map((proceso) => ({
-    label: proceso.name,
-    value: proceso.id,
-  }))
-
-  const clientesOptions: SelectOption[] = clientes.map((cliente) => ({
-    label: cliente.company,
-    value: cliente.id,
-  }))
-
-  const contadoresOptions: SelectOption[] = contadores.map((contador) => ({
-    label: `${contador.firstName} ${contador.lastName}`,
-    value: contador.id,
-  }))
 
   return (
     <Form {...form}>
@@ -159,7 +191,10 @@ export function HistoricoFiltros({
                 ) : (
                   <FormControl>
                     <SearchableSelect
-                      options={procesosOptions}
+                      options={procesos.map((proceso) => ({
+                        label: proceso.name,
+                        value: proceso.id,
+                      }))}
                       selected={field.value || []}
                       onChange={field.onChange}
                       placeholder="Seleccionar procesos"
@@ -188,7 +223,10 @@ export function HistoricoFiltros({
                 ) : (
                   <FormControl>
                     <SearchableSelect
-                      options={clientesOptions}
+                      options={clientes.map((cliente) => ({
+                        label: cliente.company,
+                        value: cliente.id,
+                      }))}
                       selected={field.value || []}
                       onChange={field.onChange}
                       placeholder="Seleccionar clientes"
@@ -206,34 +244,40 @@ export function HistoricoFiltros({
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="contadores"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Contadores</FormLabel>
-                {isLoadingContadores ? (
-                  <Skeleton className="h-10 w-full" />
-                ) : (
-                  <FormControl>
-                    <SearchableSelect
-                      options={contadoresOptions}
-                      selected={field.value || []}
-                      onChange={field.onChange}
-                      placeholder="Seleccionar contadores"
-                      multiple={true}
-                      showSearch={true}
-                      searchPlaceholder="Buscar contadores..."
-                      noResultsMessage="No se encontraron contadores"
-                      clearButtonText="Limpiar selección"
-                      selectAllButtonText="Seleccionar todos"
-                    />
-                  </FormControl>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {/* Mostrar el selector de contadores solo si el usuario no es un contador */}
+          {userRole !== "contador" && (
+            <FormField
+              control={form.control}
+              name="contadores"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contadores</FormLabel>
+                  {isLoadingContadores ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <FormControl>
+                      <SearchableSelect
+                        options={contadores.map((contador) => ({
+                          label: `${contador.firstName} ${contador.lastName}`,
+                          value: contador.id,
+                        }))}
+                        selected={field.value || []}
+                        onChange={field.onChange}
+                        placeholder="Seleccionar contadores"
+                        multiple={true}
+                        showSearch={true}
+                        searchPlaceholder="Buscar contadores..."
+                        noResultsMessage="No se encontraron contadores"
+                        clearButtonText="Limpiar selección"
+                        selectAllButtonText="Seleccionar todos"
+                      />
+                    </FormControl>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </div>
 
         <div className="flex justify-between">
@@ -246,4 +290,3 @@ export function HistoricoFiltros({
     </Form>
   )
 }
-

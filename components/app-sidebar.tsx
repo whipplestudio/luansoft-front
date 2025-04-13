@@ -24,80 +24,84 @@ import {
   History,
   Contact,
 } from "lucide-react"
+import { hasPermission, type ResourceType, type RoleType } from "@/lib/permissions"
 
-// Actualizar el ítem "Asignación de Clientes" a "Asignación de Contadores"
-const items = [
+// Estructura completa de los elementos del sidebar con información de permisos
+const sidebarItems = [
   {
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
-    roles: ["admin", "contador", "dashboard"],
+    resource: "dashboard" as ResourceType,
   },
   {
     title: "Usuarios",
     url: "/usuarios",
     icon: Users,
-    roles: ["admin"],
+    resource: "usuarios" as ResourceType,
   },
   {
     title: "Contadores",
     url: "/contadores",
     icon: Calculator,
-    roles: ["admin"],
+    resource: "contadores" as ResourceType,
   },
   {
     title: "Clientes",
     url: "/clientes",
     icon: UserCircle,
-    roles: ["admin", "contador"],
+    resource: "clientes" as ResourceType,
   },
   {
     title: "Contactos",
     url: "/contactos",
     icon: Contact,
-    roles: ["admin", "contador"],
+    resource: "contactos" as ResourceType,
   },
   {
     title: "Asignación de Contadores",
     url: "/asignacion-contadores",
     icon: UserPlus,
-    roles: ["admin"],
+    resource: "asignacion-contadores" as ResourceType,
   },
   {
     title: "Asignación de Contactos",
     url: "/asignacion-contactos",
     icon: UserPlus,
-    roles: ["admin"],
+    resource: "asignacion-contactos" as ResourceType,
   },
   {
     title: "Procesos",
     url: "/procesos",
     icon: FileText,
-    roles: ["admin"],
+    resource: "procesos" as ResourceType,
   },
   {
     title: "Regímenes Fiscales",
     url: "/regimenes-fiscales",
     icon: FileText,
-    roles: ["admin"],
+    resource: "regimenes-fiscales" as ResourceType,
   },
   {
     title: "Asignación de Procesos",
     url: "/asignar-procesos",
     icon: ClipboardList,
-    roles: ["admin", "contador"],
+    resource: "asignar-procesos" as ResourceType,
   },
   {
     title: "Histórico de Procesos",
     url: "/historico-procesos",
     icon: History,
-    roles: ["admin", "contador"],
+    resource: "historico-procesos" as ResourceType,
   },
 ]
 
 export function AppSidebar({ userRole }: { userRole: string | null }) {
   const pathname = usePathname()
-  const filteredItems = items.filter((item) => item.roles.includes(userRole || ""))
+  const role = userRole as RoleType | null
+
+  // Filtra los elementos del sidebar basados en los permisos del usuario
+  const filteredItems = sidebarItems.filter((item) => hasPermission(role, item.resource, "view"))
 
   return (
     <Sidebar className="border-r border-primary-green/20">

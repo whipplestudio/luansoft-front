@@ -27,8 +27,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { hasPermission, type RoleType } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 export default function RegimenesFiscalesPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [regimenesFiscales, setRegimenesFiscales] = useState<RegimenFiscal[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchValue, setSearchValue] = useState("")
@@ -142,6 +152,7 @@ export default function RegimenesFiscalesPage() {
         description: error.response?.data?.message || "Ocurrió un error al guardar el régimen fiscal",
         variant: "destructive",
       })
+      throw error // Re-lanzar para que el formulario pueda manejarlo
     }
   }
 
@@ -199,72 +210,87 @@ export default function RegimenesFiscalesPage() {
     fetchData(1, searchValue, perPage)
   }
 
+  // Modificar las columnas para aplicar permisos
+  const modifiedColumns = columns({
+    onEdit: hasPermission(userRole as RoleType, "regimenes-fiscales", "edit") ? handleOpenEditDialog : undefined,
+    onToggleStatus: hasPermission(userRole as RoleType, "regimenes-fiscales", "delete")
+      ? handleOpenStatusDialog
+      : undefined,
+  })
+
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Regímenes Fiscales</h1>
-        <Button onClick={handleOpenCreateDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Régimen Fiscal
-        </Button>
+    <ProtectedRoute resource="regimenes-fiscales" action="view" redirectTo="/">
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Regímenes Fiscales</h1>
+          {hasPermission(userRole as RoleType, "regimenes-fiscales", "create") && (
+            <Button onClick={handleOpenCreateDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo Régimen Fiscal
+            </Button>
+          )}
+        </div>
+
+        <DataTable
+          columns={modifiedColumns}
+          data={regimenesFiscales}
+          isLoading={isLoading}
+          onRowClick={() => {}}
+          searchValue={searchValue}
+          onSearchChange={(value) => setSearchValue(value)}
+          searchPlaceholder="Buscar por nombre o descripción..."
+          pagination={{
+            pageCount: totalPages,
+            page: currentPage,
+            onPageChange: (page) => handlePageChange(page),
+            perPage: itemsPerPage,
+            onPerPageChange: handlePerPageChange,
+          }}
+        />
+
+        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>{selectedRegimenFiscal ? "Editar Régimen Fiscal" : "Crear Régimen Fiscal"}</DialogTitle>
+            </DialogHeader>
+            <RegimenFiscalForm
+              initialData={selectedRegimenFiscal}
+              onSubmit={handleSubmit}
+              onCancel={handleCloseDialog}
+            />
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {regimenToToggle?.status === "ACTIVE"
+                  ? "¿Está seguro de desactivar este régimen fiscal?"
+                  : "¿Está seguro de activar este régimen fiscal?"}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {regimenToToggle?.status === "ACTIVE"
+                  ? "Esta acción desactivará el régimen fiscal."
+                  : "Esta acción activará el régimen fiscal."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleStatusConfirm}
+                className={
+                  regimenToToggle?.status === "ACTIVE"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-green-600 hover:bg-green-700"
+                }
+              >
+                {regimenToToggle?.status === "ACTIVE" ? "Desactivar" : "Activar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
-
-      <DataTable
-        columns={columns({
-          onEdit: handleOpenEditDialog,
-          onToggleStatus: handleOpenStatusDialog,
-        })}
-        data={regimenesFiscales}
-        isLoading={isLoading}
-        onRowClick={() => {}}
-        searchValue={searchValue}
-        onSearchChange={(value) => setSearchValue(value)}
-        searchPlaceholder="Buscar por nombre o descripción..."
-        pagination={{
-          pageCount: totalPages,
-          page: currentPage,
-          onPageChange: (page) => handlePageChange(page),
-          perPage: itemsPerPage,
-          onPerPageChange: handlePerPageChange,
-        }}
-      />
-
-      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{selectedRegimenFiscal ? "Editar Régimen Fiscal" : "Crear Régimen Fiscal"}</DialogTitle>
-          </DialogHeader>
-          <RegimenFiscalForm initialData={selectedRegimenFiscal} onSubmit={handleSubmit} onCancel={handleCloseDialog} />
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {regimenToToggle?.status === "ACTIVE"
-                ? "¿Está seguro de desactivar este régimen fiscal?"
-                : "¿Está seguro de activar este régimen fiscal?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {regimenToToggle?.status === "ACTIVE"
-                ? "Esta acción desactivará el régimen fiscal."
-                : "Esta acción activará el régimen fiscal."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleStatusConfirm}
-              className={
-                regimenToToggle?.status === "ACTIVE" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
-              }
-            >
-              {regimenToToggle?.status === "ACTIVE" ? "Desactivar" : "Activar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    </ProtectedRoute>
   )
 }

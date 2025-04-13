@@ -60,6 +60,8 @@ export default function ClientLayout({
     return null
   }
 
+  const showSideBar = userRole !== "dashboard" 
+
   return (
     <html lang="es">
       <head>
@@ -71,7 +73,7 @@ export default function ClientLayout({
             {isAuthenticated && pathname !== "/login" ? (
               <SidebarProvider>
                 <div className="group/sidebar-wrapper flex min-h-screen w-full">
-                  {userRole === "admin" && <AppSidebar userRole={userRole} />}
+                  {showSideBar && <AppSidebar userRole={userRole} />}
                   <div className="flex w-full flex-col">
                     <Header userRole={userRole} />
                     <main className="flex-1 overflow-y-auto p-4 relative">
@@ -94,4 +96,3 @@ export default function ClientLayout({
     </html>
   )
 }
-

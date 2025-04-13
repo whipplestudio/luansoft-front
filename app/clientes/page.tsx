@@ -20,7 +20,9 @@ import { debounce } from "@/utils/debounce"
 import axiosInstance from "@/api/config"
 import { ClienteDetailModal } from "@/components/ClienteDetailModal"
 import axios from "axios"
-import { Client } from "@/types"
+import type { Client } from "@/types"
+import { hasPermission, type RoleType } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 // Actualizar la interfaz ApiClient para reflejar la nueva estructura
 interface ApiClient {
@@ -46,7 +48,7 @@ interface ApiClient {
     updatedAt: string
   } | null
   regimenFiscal: {
-    id: string,
+    id: string
     nombre: string
     descripcion: string
   }
@@ -77,6 +79,14 @@ interface ApiResponse {
 }
 
 export default function ClientesPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [clients, setClients] = useState<Client[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -92,8 +102,6 @@ export default function ClientesPage() {
   })
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-
-  // ... (mantén las funciones existentes como fetchClients, handleSearchChange, etc.)
 
   const handleEdit = (client: Client) => {
     setSelectedClient(client)
@@ -125,7 +133,7 @@ export default function ClientesPage() {
     },
     {
       accessorKey: "regimenFiscal",
-      header: "Regimen fiscal"
+      header: "Regimen fiscal",
     },
     {
       accessorKey: "status",
@@ -143,6 +151,10 @@ export default function ClientesPage() {
       id: "actions",
       cell: ({ row }) => {
         const client = row.original
+        const role = userRole as RoleType | null
+        const canEdit = hasPermission(role, "clientes", "edit")
+        const canDelete = hasPermission(role, "clientes", "delete")
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -154,9 +166,9 @@ export default function ClientesPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleViewDetails(client)}>Ver detalle</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleEdit(client)}>Editar</DropdownMenuItem>
+              {canEdit && <DropdownMenuItem onClick={() => handleEdit(client)}>Editar</DropdownMenuItem>}
               <DropdownMenuSeparator />
-              {client.status === "ACTIVE" && (
+              {canDelete && client.status === "ACTIVE" && (
                 <DropdownMenuItem onClick={() => handleDelete(client)} className="text-red-600">
                   Eliminar
                 </DropdownMenuItem>
@@ -168,79 +180,85 @@ export default function ClientesPage() {
     },
   ]
 
-  // Actualizar la función fetchClients para mapear correctamente los datos
-  const fetchClients = useCallback(async (page = 1, limit = 10, filter = "") => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No se encontró el token de autenticación")
-      }
+  // Actualizar la función fetchClients para mapear correctamente los datos y enviar contadorId
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [contactos, setContactos] = useState<any[]>([])
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
 
-      const response = await axiosInstance.get<ApiResponse>(`/client`, {
-        params: {
-          page,
-          limit,
-          filter: filter || undefined,
-        },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.data.success) {
-        // Actualizar el mapeo para reflejar la nueva estructura
-        const mappedClients: Client[] = response.data.data.data.map((apiClient) => ({
-          id: apiClient.id,
-          company: apiClient.company,
-          type: apiClient.type,
-          status: apiClient.status as "ACTIVE" | "INACTIVE",
-          regimenFiscalId: apiClient.regimenFiscal.id,
-          regimenFiscal: apiClient.regimenFiscal.nombre,
-          contador: apiClient.contador
-            ? {
-                id: apiClient.contador.id,
-                name: `${apiClient.contador.firstName} ${apiClient.contador.lastName}`,
-                email: apiClient.contador.email,
-              }
-            : null,
-          contacto: apiClient.contacto
-            ? {
-                id: apiClient.contacto.id,
-                name: `${apiClient.contacto.firstName} ${apiClient.contacto.lastName}`,
-                email: apiClient.contacto.email,
-                phone: apiClient.contacto.phone,
-              }
-            : null,
-          createdAt: apiClient.createdAt,
-          updatedAt: apiClient.updatedAt,
-          isAssigned: !!apiClient.contador,
-        }))
-
-        setClients(mappedClients)
-        setPagination({
-          page: response.data.data.page,
-          limit: response.data.data.limit,
-          total: response.data.data.total,
-          totalPages: response.data.data.totalPages,
-        })
-      } else {
-        throw new Error(response.data.message || "Error al obtener los clientes")
-      }
-    } catch (error) {
-      console.error("Error al obtener los clientes:", error)
-      toast.error("Error al cargar los clientes")
-    } finally {
-      setIsLoading(false)
+  interface ContactosResponse {
+    success: boolean
+    data: {
+      data: any[]
+      total: number
+      page: number
+      limit: number
+      totalPages: number
     }
-  }, [])
+  }
+
+  // Buscar la función fetchClientes y modificarla para incluir el contadorId cuando el usuario es un contador
+  const fetchClients = useCallback(
+    async (search?: string) => {
+      setIsLoading(true)
+      try {
+        const params = new URLSearchParams()
+        params.append("page", currentPage.toString())
+        params.append("limit", pageSize.toString())
+
+        // Añadir filtro si existe
+        const filterTerm = search !== undefined ? search : searchTerm
+        if (filterTerm.trim()) {
+          params.append("filter", filterTerm)
+        }
+
+        // Añadir contadorId si el usuario es un contador
+        const userRole = localStorage.getItem("userRole")
+        if (userRole === "contador") {
+          const userData = localStorage.getItem("user")
+          if (userData) {
+            const user = JSON.parse(userData)
+            if (user.id) {
+              params.append("contadorId", user.id)
+            }
+          }
+        }
+
+        const response = await axiosInstance.get<ContactosResponse>(`/client?${params.toString()}`)
+
+        if (response.data.success) {
+          setContactos(response.data.data.data)
+          setTotalPages(response.data.data.totalPages)
+          setTotalItems(response.data.data.total)
+        } else {
+          console.error("Error en la respuesta de la API:", response.data.message)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar los clientes",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error al obtener clientes:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los clientes",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [currentPage, pageSize, searchTerm],
+  )
 
   // Debounce para la búsqueda
   const debouncedSearch = useCallback(
     debounce((value: string) => {
-      fetchClients(1, pagination.limit, value)
+      fetchClients(value)
     }, 3000),
-    [fetchClients, pagination.limit],
+    [fetchClients],
   )
 
   // Manejar cambio en el término de búsqueda
@@ -251,14 +269,13 @@ export default function ClientesPage() {
 
   // Manejar cambio de página
   const handlePageChange = (page: number) => {
-    setPagination((prev) => ({ ...prev, page }))
-    fetchClients(page, pagination.limit, searchTerm)
+    setCurrentPage(page)
   }
 
   // Manejar cambio en el número de filas por página
   const handleLimitChange = (limit: number) => {
-    setPagination((prev) => ({ ...prev, limit, page: 1 }))
-    fetchClients(1, limit, searchTerm)
+    setPageSize(limit)
+    setCurrentPage(1)
   }
 
   // Cargar los clientes al montar el componente
@@ -284,7 +301,7 @@ export default function ClientesPage() {
         if (response.data.success) {
           toast.success("Cliente eliminado exitosamente")
           setIsDeleteDialogOpen(false)
-          fetchClients(pagination.page, pagination.limit, searchTerm)
+          fetchClients()
         } else {
           throw new Error(response.data.message || "Error al eliminar el cliente")
         }
@@ -303,62 +320,65 @@ export default function ClientesPage() {
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <Toaster />
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Clientes</h1>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Agregar Cliente
-        </Button>
+    <ProtectedRoute resource="clientes" action="view" redirectTo="/">
+      <div className="container mx-auto py-10">
+        <Toaster />
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Clientes</h1>
+          {hasPermission(userRole as RoleType, "clientes", "create") && (
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Agregar Cliente
+            </Button>
+          )}
+        </div>
+        <DataTable
+          columns={columns}
+          data={contactos}
+          isLoading={isLoading}
+          pagination={{
+            pageCount: totalPages,
+            page: currentPage,
+            onPageChange: handlePageChange,
+            perPage: pageSize,
+            onPerPageChange: handleLimitChange,
+          }}
+          searchValue={searchTerm}
+          onSearchChange={handleSearchChange}
+        />
+        <DialogCreateClient
+          isOpen={isCreateDialogOpen}
+          onOpenChange={setIsCreateDialogOpen}
+          onSuccess={() => {
+            setIsCreateDialogOpen(false)
+            fetchClients()
+          }}
+        />
+        <DialogCreateClient
+          isOpen={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          client={selectedClient}
+          onSuccess={() => {
+            setIsEditDialogOpen(false)
+            setSelectedClient(null)
+            fetchClients()
+          }}
+        />
+        <ConfirmationDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={confirmDelete}
+          title="Eliminar Cliente"
+          description="¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer."
+          confirmationWord="ELIMINAR"
+          isConfirming={isDeleting}
+        />
+        <ClienteDetailModal
+          isOpen={isDetailModalOpen}
+          onClose={() => setIsDetailModalOpen(false)}
+          client={selectedClient}
+        />
       </div>
-      <DataTable
-        columns={columns}
-        data={clients}
-        isLoading={isLoading}
-        pagination={{
-          pageCount: pagination.totalPages,
-          page: pagination.page,
-          onPageChange: handlePageChange,
-          perPage: pagination.limit,
-          onPerPageChange: handleLimitChange,
-        }}
-        searchValue={searchTerm}
-        onSearchChange={handleSearchChange}
-      />
-      <DialogCreateClient
-        isOpen={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        onSuccess={() => {
-          setIsCreateDialogOpen(false)
-          fetchClients(pagination.page, pagination.limit, searchTerm)
-        }}
-      />
-      <DialogCreateClient
-        isOpen={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        client={selectedClient}
-        onSuccess={() => {
-          setIsEditDialogOpen(false)
-          setSelectedClient(null)
-          fetchClients(pagination.page, pagination.limit, searchTerm)
-        }}
-      />
-      <ConfirmationDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={confirmDelete}
-        title="Eliminar Cliente"
-        description="¿Estás seguro de que quieres eliminar este cliente? Esta acción no se puede deshacer."
-        confirmationWord="ELIMINAR"
-        isConfirming={isDeleting}
-      />
-      <ClienteDetailModal
-        isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
-        client={selectedClient}
-      />
-    </div>
+    </ProtectedRoute>
   )
 }
-

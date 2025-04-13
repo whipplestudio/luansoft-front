@@ -14,8 +14,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge"
 import { ConfirmationDialog } from "@/components/ConfirmationDialog"
 import { axiosInstance } from "@/lib/axios"
+import { getLoggedContadorId } from "@/lib/permissions"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 export default function AsignacionContadoresPage() {
+  // Obtener el rol del usuario desde localStorage al cargar el componente
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   const [selectedContador, setSelectedContador] = useState<Contador | null>(null)
   const [assignedClients, setAssignedClients] = useState<Client[]>([])
   const [unassignedClients, setUnassignedClients] = useState<Client[]>([])
@@ -38,17 +48,28 @@ export default function AsignacionContadoresPage() {
       })
 
       if (response.data.success) {
-        setContadores(
-          response.data.data.map((contador: any) => ({
-            id: contador.id,
-            name: `${contador.firstName} ${contador.lastName}`,
-            email: contador.email,
-            role: "contador",
-            status: contador.status.toLowerCase(),
-            lastLogin: null,
-            clients: [],
-          })),
-        )
+        const contadoresData = response.data.data.map((contador: any) => ({
+          id: contador.id,
+          name: `${contador.firstName} ${contador.lastName}`,
+          email: contador.email,
+          role: "contador",
+          status: contador.status.toLowerCase(),
+          lastLogin: null,
+          clients: [],
+        }))
+        setContadores(contadoresData)
+
+        // Si el usuario es un contador, preseleccionar su ID
+        if (userRole === "contador") {
+          const contadorId = getLoggedContadorId()
+          if (contadorId) {
+            const loggedContador = contadoresData.find((c) => c.id === contadorId)
+            if (loggedContador) {
+              setSelectedContador(loggedContador)
+              fetchAssignedClients(loggedContador.id)
+            }
+          }
+        }
       } else {
         throw new Error(response.data.message || "Error fetching contadores")
       }
@@ -56,7 +77,7 @@ export default function AsignacionContadoresPage() {
       console.error("Error fetching contadores:", error)
       toast.error("Error al cargar los contadores")
     }
-  }, [])
+  }, [userRole])
 
   const fetchUnassignedClients = useCallback(async () => {
     try {
@@ -125,7 +146,32 @@ export default function AsignacionContadoresPage() {
   useEffect(() => {
     fetchContadores()
     fetchUnassignedClients()
-  }, [fetchContadores, fetchUnassignedClients])
+
+    // Preseleccionar el contador logueado si el usuario es un contador
+    const userRole = localStorage.getItem("userRole")
+    if (userRole === "contador") {
+      const userData = localStorage.getItem("user")
+      if (userData) {
+        const user = JSON.parse(userData)
+        if (user.id) {
+          // Buscar el contador correspondiente al usuario
+          const contadorId = user.id
+          // Establecer el contador seleccionado
+          setSelectedContador({
+            id: contadorId,
+            name: user.name,
+            email: user.email,
+            role: "contador",
+            status: "active",
+            lastLogin: null,
+            clients: [],
+          })
+          // Cargar los clientes asignados a este contador
+          fetchAssignedClients(contadorId)
+        }
+      }
+    }
+  }, [fetchContadores, fetchUnassignedClients, fetchAssignedClients])
 
   const filteredUnassignedClients = useMemo(() => {
     return unassignedClients.filter((client) => client.company.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -277,160 +323,171 @@ export default function AsignacionContadoresPage() {
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <Toaster />
-      <h1 className="text-2xl font-bold mb-6">Asignación de Contadores</h1>
-      <div className="mb-6">
-        <Label htmlFor="contador-select">Seleccionar Contador</Label>
-        <Popover open={openContadorSelect} onOpenChange={setOpenContadorSelect}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={openContadorSelect}
-              className="w-full justify-between"
-            >
-              {selectedContador ? selectedContador.name : "Seleccione un contador..."}
-              <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[400px] p-0">
-            <Command>
-              <CommandInput placeholder="Buscar contador..." onValueChange={setContadorSearchTerm} />
-              <CommandList>
-                <CommandEmpty>No se encontraron contadores.</CommandEmpty>
-                <CommandGroup>
-                  {filteredContadores.map((contador) => (
-                    <CommandItem key={contador.id} onSelect={() => handleContadorChange(contador.id)}>
-                      <User className="mr-2 h-4 w-4" />
-                      <span>{contador.name}</span>
-                      <span className="ml-auto text-sm text-muted-foreground">{contador.email}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+    <ProtectedRoute resource="asignacion-contadores" action="view" redirectTo="/">
+      <div className="container mx-auto py-10">
+        <Toaster />
+        <h1 className="text-2xl font-bold mb-6">Asignación de Contadores</h1>
+        {/* Mostrar el selector de contador solo si el usuario no es un contador */}
+        {localStorage.getItem("userRole") !== "contador" ? (
+          <div className="mb-6">
+            <Label htmlFor="contador-select">Seleccionar Contador</Label>
+            <Popover open={openContadorSelect} onOpenChange={setOpenContadorSelect}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openContadorSelect}
+                  className="w-full justify-between"
+                >
+                  {selectedContador ? selectedContador.name : "Seleccione un contador..."}
+                  <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar contador..." onValueChange={setContadorSearchTerm} />
+                  <CommandList>
+                    <CommandEmpty>No se encontraron contadores.</CommandEmpty>
+                    <CommandGroup>
+                      {filteredContadores.map((contador) => (
+                        <CommandItem key={contador.id} onSelect={() => handleContadorChange(contador.id)}>
+                          <User className="mr-2 h-4 w-4" />
+                          <span>{contador.name}</span>
+                          <span className="ml-auto text-sm text-muted-foreground">{contador.email}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : (
+          /* Mostrar el nombre del contador seleccionado cuando el usuario es un contador */
+          <div className="mb-6">
+            <Label>Contador Seleccionado</Label>
+            <div className="p-2 border rounded-md bg-muted">{selectedContador?.name || "Cargando..."}</div>
+          </div>
+        )}
+
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-2 gap-6">
+            <Card className="h-full flex flex-col">
+              <CardContent className="p-4 flex-grow flex flex-col">
+                <h2 className="text-xl font-semibold mb-4">Clientes Asignados</h2>
+                <div className="mb-4">
+                  <Label htmlFor="search-assigned-clients">Buscar Clientes</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search-assigned-clients"
+                      placeholder="Buscar por nombre de empresa"
+                      value={assignedSearchTerm}
+                      onChange={(e) => setAssignedSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+                <div className="flex-grow overflow-hidden" style={{ maxHeight: "550px" }}>
+                  <Droppable droppableId="assigned">
+                    {(provided, snapshot) => (
+                      <div
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className={`h-full overflow-y-auto overflow-x-hidden p-4 rounded-lg transition-colors duration-200 ${
+                          snapshot.isDraggingOver ? "bg-green-100" : ""
+                        }`}
+                        style={{ maxHeight: "100%" }}
+                      >
+                        <div className="space-y-4">
+                          {filteredAssignedClients.map((client, index) => (
+                            <Draggable key={client.id} draggableId={client.id} index={index}>
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className="transition-transform duration-200 hover:scale-105"
+                                >
+                                  <ClientCard client={client} />
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="h-full flex flex-col">
+              <CardContent className="p-4 flex-grow flex flex-col">
+                <h2 className="text-xl font-semibold mb-4">Clientes No Asignados</h2>
+                <div className="mb-4">
+                  <Label htmlFor="search-clients">Buscar Clientes</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search-clients"
+                      placeholder="Buscar por nombre de empresa"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                </div>
+                <div className="flex-grow overflow-hidden" style={{ maxHeight: "550px" }}>
+                  <Droppable droppableId="unassigned">
+                    {(provided, snapshot) => (
+                      <div
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className={`h-full overflow-y-auto overflow-x-hidden p-4 rounded-lg transition-colors duration-200 ${
+                          snapshot.isDraggingOver ? "bg-red-100" : ""
+                        }`}
+                        style={{ maxHeight: "100%" }}
+                      >
+                        <div className="space-y-4">
+                          {filteredUnassignedClients.map((client, index) => (
+                            <Draggable key={client.id} draggableId={client.id} index={index}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={`draggable-transition ${snapshot.isDragging ? "scale-105" : ""}`}
+                                >
+                                  <ClientCard client={client} />
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </DragDropContext>
+        <ConfirmationDialog
+          isOpen={isConfirmDialogOpen}
+          onClose={() => {
+            setIsConfirmDialogOpen(false)
+            setClientToUnassign(null)
+          }}
+          onConfirm={handleUnassignConfirm}
+          title="Desasignar Cliente"
+          description={`¿Estás seguro de que quieres desasignar a ${clientToUnassign?.company}? Esta acción no se puede deshacer.`}
+          confirmationWord="DESASIGNAR"
+          isConfirming={false}
+        />
       </div>
-
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-2 gap-6">
-          <Card className="h-full flex flex-col">
-            <CardContent className="p-4 flex-grow flex flex-col">
-              <h2 className="text-xl font-semibold mb-4">Clientes Asignados</h2>
-              <div className="mb-4">
-                <Label htmlFor="search-assigned-clients">Buscar Clientes</Label>
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search-assigned-clients"
-                    placeholder="Buscar por nombre de empresa"
-                    value={assignedSearchTerm}
-                    onChange={(e) => setAssignedSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
-              <div className="flex-grow overflow-hidden" style={{ maxHeight: "550px" }}>
-                <Droppable droppableId="assigned">
-                  {(provided, snapshot) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className={`h-full overflow-y-auto overflow-x-hidden p-4 rounded-lg transition-colors duration-200 ${
-                        snapshot.isDraggingOver ? "bg-green-100" : ""
-                      }`}
-                      style={{ maxHeight: "100%" }}
-                    >
-                      <div className="space-y-4">
-                        {filteredAssignedClients.map((client, index) => (
-                          <Draggable key={client.id} draggableId={client.id} index={index}>
-                            {(provided) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className="transition-transform duration-200 hover:scale-105"
-                              >
-                                <ClientCard client={client} />
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="h-full flex flex-col">
-            <CardContent className="p-4 flex-grow flex flex-col">
-              <h2 className="text-xl font-semibold mb-4">Clientes No Asignados</h2>
-              <div className="mb-4">
-                <Label htmlFor="search-clients">Buscar Clientes</Label>
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search-clients"
-                    placeholder="Buscar por nombre de empresa"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
-                  />
-                </div>
-              </div>
-              <div className="flex-grow overflow-hidden" style={{ maxHeight: "550px" }}>
-                <Droppable droppableId="unassigned">
-                  {(provided, snapshot) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className={`h-full overflow-y-auto overflow-x-hidden p-4 rounded-lg transition-colors duration-200 ${
-                        snapshot.isDraggingOver ? "bg-red-100" : ""
-                      }`}
-                      style={{ maxHeight: "100%" }}
-                    >
-                      <div className="space-y-4">
-                        {filteredUnassignedClients.map((client, index) => (
-                          <Draggable key={client.id} draggableId={client.id} index={index}>
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`draggable-transition ${snapshot.isDragging ? "scale-105" : ""}`}
-                              >
-                                <ClientCard client={client} />
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </DragDropContext>
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        onClose={() => {
-          setIsConfirmDialogOpen(false)
-          setClientToUnassign(null)
-        }}
-        onConfirm={handleUnassignConfirm}
-        title="Desasignar Cliente"
-        description={`¿Estás seguro de que quieres desasignar a ${clientToUnassign?.company}? Esta acción no se puede deshacer.`}
-        confirmationWord="DESASIGNAR"
-        isConfirming={false}
-      />
-    </div>
+    </ProtectedRoute>
   )
 }
