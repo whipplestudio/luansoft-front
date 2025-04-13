@@ -22,6 +22,9 @@ const formSchema = z.object({
   contadores: z.array(z.string()).optional(),
 })
 
+// Modificar para preseleccionar y bloquear el contacto cuando el usuario es un contacto
+
+// Primero, actualizar las props para incluir userRole y el ID del contacto preseleccionado
 interface HistoricoFiltrosProps {
   onFilter: (filters: any) => void
   procesos: { id: string; name: string }[]

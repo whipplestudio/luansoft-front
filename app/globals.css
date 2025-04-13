@@ -106,6 +106,31 @@
   padding: 2rem;
 }
 
+/* Ajustes para las tarjetas en modo de pantalla completa */
+.fullscreen-mode .card {
+  height: auto !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.fullscreen-mode .card-content {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Optimizar el espacio vertical en pantalla completa */
+.fullscreen-mode .grid {
+  grid-auto-rows: min-content;
+}
+
+/* Asegurar que las tarjetas no se estiren */
+.card-grid-container {
+  display: grid;
+  grid-template-rows: min-content;
+  grid-auto-rows: min-content;
+}
+
 /* Optimize space for desktop view */
 @media (min-width: 1024px) {
   .container {
@@ -167,7 +192,7 @@
   .container {
     max-width: 2560px;
   }
-
+  \
   .2
   xl\:max-w-\[300px\] {
     max-width: 300px;
@@ -287,4 +312,3 @@
 .border-yellow-300 {
   border-color: rgba(153, 133, 66, 0.3);
 }
-

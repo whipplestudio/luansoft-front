@@ -12,6 +12,7 @@ import { axiosInstance } from "@/lib/axios"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
 import { getLoggedContadorId } from "@/lib/permissions"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { getLoggedContactoId } from "@/lib/permissions"
 
 // Interfaces para la respuesta de la API
 interface ProcessHistoryResponse {
@@ -513,6 +514,14 @@ export default function HistoricoProcesosPage() {
         filters.contadorIds.forEach((id) => {
           searchParams.append("contadorId[]", id)
         })
+      }
+
+      // Verificar si el usuario es un contacto y añadir su ID como filtro
+      if (userRole === "contacto") {
+        const contactoId = getLoggedContactoId()
+        if (contactoId) {
+          searchParams.append("contactoId", contactoId)
+        }
       }
 
       if (filters.processIds && filters.processIds.length > 0) {

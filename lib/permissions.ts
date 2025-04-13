@@ -15,8 +15,8 @@ export type ResourceType =
 // Define las acciones que se pueden realizar en los recursos
 export type ActionType = "view" | "create" | "edit" | "delete"
 
-// Define los roles disponibles en la aplicación
-export type RoleType = "admin" | "contador" | "cliente" | "dashboard"
+// Actualizar type RoleType para incluir "contacto" en la definición
+export type RoleType = "admin" | "contador" | "contacto" | "dashboard"
 
 // Interfaz para permisos por rol
 interface RolePermissions {
@@ -25,7 +25,7 @@ interface RolePermissions {
   }
 }
 
-// Definición de permisos por rol
+// En la sección PERMISSIONS, actualizar la configuración para contacto
 const PERMISSIONS: Record<RoleType, RolePermissions> = {
   admin: {
     // Los administradores tienen acceso completo a todo
@@ -55,9 +55,9 @@ const PERMISSIONS: Record<RoleType, RolePermissions> = {
     "asignar-procesos": { view: true, create: true, edit: true, delete: true },
     "historico-procesos": { view: true, create: true, edit: true, delete: true },
   },
-  cliente: {
-    // Permisos básicos para clientes
-    dashboard: { view: false, create: false, edit: false, delete: false },
+  contacto: {
+    // Permisos para el rol de contacto según los nuevos requisitos
+    dashboard: { view: true, create: false, edit: false, delete: false },
     usuarios: { view: false, create: false, edit: false, delete: false },
     contadores: { view: false, create: false, edit: false, delete: false },
     clientes: { view: false, create: false, edit: false, delete: false },
@@ -116,6 +116,21 @@ export function getLoggedContadorId(): string | null {
     return null
   } catch (error) {
     console.error("Error al obtener el ID del contador:", error)
+    return null
+  }
+}
+
+// Añadir una función para obtener el ID del contacto logueado
+export function getLoggedContactoId(): string | null {
+  try {
+    const user = localStorage.getItem("user")
+    if (user) {
+      const userData = JSON.parse(user)
+      return userData.contactoId
+    }
+    return null
+  } catch (error) {
+    console.error("Error al obtener el ID del contacto:", error)
     return null
   }
 }

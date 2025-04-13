@@ -1,10 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, CheckCircle, User, LogOut, Settings } from "lucide-react"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
-import { Button } from "@/components/ui/button"
+import { User, LogOut, Settings } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +15,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { User as UserType } from "@/types"
 import { useRouter } from "next/navigation"
 import { Logo } from "@/components/Logo"
+
+// Al inicio del archivo, después de las importaciones, importamos nuestras utilidades de permisos:
+import { hasPermission, type RoleType } from "@/lib/permissions"
 
 type Notification = {
   id: string
@@ -81,69 +81,16 @@ export function Header({ userRole }: { userRole: string | null }) {
     router.push("/login")
   }
 
+  // Reemplazar la lógica de mostrar/ocultar el sidebar basada en el rol
+  const showSidebar = hasPermission(userRole as RoleType, "dashboard", "view")
+
   return (
     <header className="sticky top-0 z-50 flex h-[60px] w-full items-center justify-between border-b bg-background px-6">
       <div className="flex items-center gap-4">
-        {userRole !== "dashboard" && userRole !== "cliente" && <SidebarTrigger />}
+        {showSidebar && <SidebarTrigger />}
         <Logo variant="horizontal" color="black" width={150} height={40} className="h-20 w-auto" />
       </div>
       <div className="flex items-center gap-4">
-        {userRole !== "cliente" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative text-primary-green">
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-gold" />}
-                <span className="sr-only">Notificaciones</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {notifications.length === 0 ? (
-                <DropdownMenuItem>No hay notificaciones</DropdownMenuItem>
-              ) : (
-                notifications.map((notification) => (
-                  <DropdownMenuItem key={notification.id} className="flex items-start justify-between p-4">
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span
-                          className={`h-2 w-2 rounded-full ${
-                            notification.severity === "high"
-                              ? "bg-destructive"
-                              : notification.severity === "medium"
-                                ? "bg-gold"
-                                : "bg-primary-green"
-                          }`}
-                        />
-                        <p className="font-medium">{notification.title}</p>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{notification.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(notification.date), "d 'de' MMMM 'a las' HH:mm", { locale: es })}
-                      </p>
-                    </div>
-                    {!notification.read && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          markAsRead(notification.id)
-                        }}
-                        className="h-8 w-8 text-primary-green"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span className="sr-only">Marcar como leída</span>
-                      </Button>
-                    )}
-                  </DropdownMenuItem>
-                ))
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
@@ -152,21 +99,6 @@ export function Header({ userRole }: { userRole: string | null }) {
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {userRole !== "dashboard" && (
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                <span>Perfil</span>
-              </DropdownMenuItem>
-            )}
-            {userRole !== "dashboard" && userRole !== "cliente" && (
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Configuración</span>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Cerrar sesión</span>
@@ -177,4 +109,3 @@ export function Header({ userRole }: { userRole: string | null }) {
     </header>
   )
 }
-

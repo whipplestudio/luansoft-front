@@ -192,7 +192,7 @@ const InfiniteScrollDisplay = ({
 
       // Calculate approximate card dimensions (including margins)
       // These values should match your CSS for the cards
-      const cardHeight = 120 // Approximate height in pixels
+      const cardHeight = 100 // Reducir la altura aproximada en píxeles
       const cardWidth = 250 // Approximate width in pixels
       const cardMargin = 16 // Approximate margin in pixels
 
@@ -200,7 +200,7 @@ const InfiniteScrollDisplay = ({
       const cardsPerRow = Math.floor(viewportWidth / (cardWidth + cardMargin * 2))
 
       // Calculate how many rows can fit in the viewport
-      const availableHeight = viewportHeight - 200 // Subtract header/footer space
+      const availableHeight = viewportHeight - 150 // Subtract header/footer space
       const rowsPerScreen = Math.floor(availableHeight / (cardHeight + cardMargin * 2))
 
       // Calculate total cards that can fit on screen
@@ -272,12 +272,13 @@ const InfiniteScrollDisplay = ({
       </div>
 
       <div
-        className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 md:gap-6 flex-1 transition-opacity duration-500 ease-in-out ${isVisible ? "opacity-100" : "opacity-0"}`}
+        className={`card-grid-container grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 md:gap-6 transition-opacity duration-500 ease-in-out ${isVisible ? "opacity-100" : "opacity-0"}`}
+        style={{ gridAutoRows: "min-content" }}
       >
         {currentBulk.map((item: FiscalDeliverable) => (
           <Card
             key={item.id}
-            className="overflow-hidden cursor-pointer w-full hover:shadow-lg transition-shadow"
+            className="overflow-hidden cursor-pointer w-full hover:shadow-lg transition-shadow h-auto"
             onClick={() => onClientClick(item)}
           >
             <CardContent className="p-4">
@@ -296,6 +297,21 @@ const InfiniteScrollDisplay = ({
       </div>
     </div>
   )
+}
+
+// Function to get the logged contact id
+const getLoggedContactoId = () => {
+  try {
+    const userData = localStorage.getItem("user")
+    if (userData) {
+      const user = JSON.parse(userData)
+      return user.contactoId || null
+    }
+    return null
+  } catch (error) {
+    console.error("Error al obtener el ID del contacto:", error)
+    return null
+  }
 }
 
 export default function DashboardPage() {
@@ -456,16 +472,26 @@ export default function DashboardPage() {
         limit,
       }
 
-      // Añadir filtros si existen
-      if (filters) {
-        Object.entries(filters).forEach(([key, value]) => {
-          if (
-            value &&
-            (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
-          ) {
-            params[key] = value
-          }
-        })
+      // Verificar si el usuario es un contacto y añadir su ID como filtro
+      const userRole = localStorage.getItem("userRole")
+      if (userRole === "contacto") {
+        const contactoId = getLoggedContactoId()
+        if (contactoId) {
+          // Si ya hay contactoIds en los filtros, ignorarlos y usar solo el ID del usuario
+          params.contactoIds = [contactoId]
+        }
+      } else {
+        // Añadir filtros si existen
+        if (filters) {
+          Object.entries(filters).forEach(([key, value]) => {
+            if (
+              value &&
+              (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
+            ) {
+              params[key] = value
+            }
+          })
+        }
       }
 
       const response = await axiosInstance.get<ApiResponse>("/dashboard/clients", {
@@ -526,15 +552,25 @@ export default function DashboardPage() {
         limit: 10000, // Set a very high limit to get all clients at once
       }
 
-      // Add any active filters
-      Object.entries(filters).forEach(([key, value]) => {
-        if (
-          value &&
-          (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
-        ) {
-          params[key] = value
+      // Verificar si el usuario es un contacto y añadir su ID como filtro
+      const userRole = localStorage.getItem("userRole")
+      if (userRole === "contacto") {
+        const contactoId = getLoggedContactoId()
+        if (contactoId) {
+          // Si ya hay contactoIds en los filtros, ignorarlos y usar solo el ID del usuario
+          params.contactoIds = [contactoId]
         }
-      })
+      } else {
+        // Add any active filters
+        Object.entries(filters).forEach(([key, value]) => {
+          if (
+            value &&
+            (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
+          ) {
+            params[key] = value
+          }
+        })
+      }
 
       const response = await axiosInstance.get<ApiResponse>("/dashboard/clients", {
         params,
@@ -596,6 +632,16 @@ export default function DashboardPage() {
       processIds: [],
       contactoIds: [], // Change from contactIds to contactoIds
     }
+
+    // Si el usuario es un contacto, mantener su ID en los filtros
+    const userRole = localStorage.getItem("userRole")
+    if (userRole === "contacto") {
+      const contactoId = getLoggedContactoId()
+      if (contactoId) {
+        emptyFilters.contactoIds = [contactoId]
+      }
+    }
+
     setFilters(emptyFilters)
     setCurrentPage(1)
     fetchClients(1, ITEMS_PER_PAGE, emptyFilters)
@@ -622,6 +668,25 @@ export default function DashboardPage() {
   const FilterContent = () => {
     // Estado local para el valor del input de empresa
     const [companyNameInput, setCompanyNameInput] = useState(filters.companyName)
+    const [localUserRole, setLocalUserRole] = useState<string | null>(null)
+    const [contactoId, setContactoId] = useState<string | null>(null)
+
+    // Obtener el rol del usuario y el ID del contacto si aplica
+    useEffect(() => {
+      const role = localStorage.getItem("userRole")
+      setLocalUserRole(role)
+
+      if (role === "contacto") {
+        const contactId = getLoggedContactoId()
+        setContactoId(contactId)
+
+        // Si es rol contacto, establecer automáticamente el filtro de contacto
+        // SOLO si no está ya establecido para evitar bucles infinitos
+        if (contactId && (!filters.contactoIds || !filters.contactoIds.includes(contactId))) {
+          handleFilter("contactoIds", [contactId])
+        }
+      }
+    }, [filters.contactoIds, handleFilter]) // Eliminar handleFilter de las dependencias para evitar el bucle
 
     // Manejar cambio en el input de empresa con debounce
     const handleCompanyNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -694,16 +759,21 @@ export default function DashboardPage() {
             placeholder="Seleccionar responsables"
           />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="contactoIds">Contactos</Label>
-          <SearchableSelect
-            options={allContacts.map((contact) => ({ label: contact.name, value: contact.id }))}
-            selected={filters.contactoIds}
-            onChange={(selected) => handleFilter("contactoIds", selected)}
-            multiple={true}
-            placeholder="Seleccionar contactos"
-          />
-        </div>
+
+        {/* Mostrar selector de contactos solo si el usuario NO es un contacto */}
+        {localUserRole !== "contacto" ? (
+          <div className="space-y-2">
+            <Label htmlFor="contactoIds">Contactos</Label>
+            <SearchableSelect
+              options={allContacts.map((contact) => ({ label: contact.name, value: contact.id }))}
+              selected={filters.contactoIds}
+              onChange={(selected) => handleFilter("contactoIds", selected)}
+              multiple={true}
+              placeholder="Seleccionar contactos"
+            />
+          </div>
+        ) : null}
+
         <div className="space-y-2">
           <Label htmlFor="processIds">Procesos</Label>
           <SearchableSelect
@@ -721,14 +791,43 @@ export default function DashboardPage() {
     )
   }
 
+  // Buscar el useEffect que maneja el modo de pantalla completa (cerca de la línea 1000)
+  // y reemplazarlo con este código mejorado:
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      // Actualizar el estado isFullscreen basado en si hay un elemento en pantalla completa
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    // Añadir event listeners para todos los navegadores
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange)
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange)
+    document.addEventListener("MSFullscreenchange", handleFullscreenChange)
+
+    // Limpiar los event listeners al desmontar
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange)
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange)
+      document.removeEventListener("MSFullscreenchange", handleFullscreenChange)
+    }
+  }, [])
+
+  // Modificar la función toggleFullscreen para que sea más robusta
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen()
-      setIsFullscreen(true)
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error(`Error al intentar entrar en modo pantalla completa: ${err.message}`)
+      })
+      // No necesitamos setIsFullscreen(true) aquí porque el event listener lo hará
     } else {
       if (document.exitFullscreen) {
-        document.exitFullscreen()
-        setIsFullscreen(false)
+        document.exitFullscreen().catch((err) => {
+          console.error(`Error al intentar salir del modo pantalla completa: ${err.message}`)
+        })
+        // No necesitamos setIsFullscreen(false) aquí porque el event listener lo hará
       }
     }
   }
@@ -744,7 +843,9 @@ export default function DashboardPage() {
     }
   }, [isFullscreen, fetchAllClients, allClientsData.length, isLoadingAllClients])
 
-  // Move the conditional logic inside the useEffect hook
+  // Modificar la sección useEffect que obtiene el rol del usuario
+
+  // Buscar la sección donde se verifica el rol del usuario y añadir el rol "contacto"
   useEffect(() => {
     const role = localStorage.getItem("userRole")
     setUserRole(role)
@@ -752,19 +853,55 @@ export default function DashboardPage() {
     setIsClient(isClientUser)
   }, [])
 
+  // Añadir este useEffect después del useEffect que establece userRole
+  useEffect(() => {
+    // Si el usuario es un contacto, establecer su ID en los filtros iniciales
+    if (userRole === "contacto") {
+      const contactoId = getLoggedContactoId()
+      if (contactoId && !filters.contactoIds.includes(contactoId)) {
+        // Actualizar los filtros sin desencadenar una nueva renderización
+        setFilters((prevFilters) => ({
+          ...prevFilters,
+          contactoIds: [contactoId],
+        }))
+      }
+    }
+  }, [userRole]) // Solo se ejecuta cuando cambia
+
+  // Define fetchData outside of the conditional rendering
   const fetchData = useCallback(async () => {
     await fetchDashboardData()
     await fetchContadores()
     await fetchProcesses()
     await fetchContacts()
-    await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+
+    // Verificar si el usuario es un contacto y añadir su ID como filtro
+    const userRole = localStorage.getItem("userRole")
+    if (userRole === "contacto") {
+      const contactoId = getLoggedContactoId()
+      if (contactoId) {
+        // Crear un nuevo objeto de filtros con el contactoId
+        const contactoFilters = {
+          ...filters,
+          contactoIds: [contactoId],
+        }
+        await fetchClients(currentPage, ITEMS_PER_PAGE, contactoFilters)
+      } else {
+        await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+      }
+    } else {
+      await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+    }
+
     setInitialLoad(false)
   }, [fetchDashboardData, fetchContadores, fetchProcesses, fetchContacts, fetchClients, currentPage, filters])
 
+  // Move the useEffect hook that calls fetchData outside the conditional rendering
   useEffect(() => {
     fetchData()
   }, [fetchData])
 
+  // Move the useEffect hook that redirects clients outside the conditional rendering
   useEffect(() => {
     if (isClient) {
       router.push("/historial")
@@ -773,6 +910,7 @@ export default function DashboardPage() {
 
   let content = null
 
+  // En la parte donde se define el contenido conditional, modificar así:
   if (isClient) {
     content = null // The client will be redirected to /historial
   } else {
@@ -787,9 +925,22 @@ export default function DashboardPage() {
             <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-0">Semáforo de Clientes</h1>
           )}
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Cerrar sesión eliminando datos de autenticación
+                localStorage.removeItem("accessToken")
+                localStorage.removeItem("refreshToken")
+                localStorage.removeItem("user")
+                localStorage.removeItem("isAuthenticated")
+                localStorage.removeItem("userRole")
+                // Redirigir a la página de login
+                router.push("/login")
+              }}
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver al login
+              Cerrar sesión
             </Button>
             <Sheet>
               <SheetTrigger asChild>
@@ -834,7 +985,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {!isFullscreen && (
+        {/* Ocultar las secciones de resumen, clientes y contadores para el rol contacto */}
+        {!isFullscreen && userRole !== "contacto" && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
             <Card className="col-span-1 sm:col-span-3">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -896,7 +1048,7 @@ export default function DashboardPage() {
             </Card>
           </div>
         )}
-        {!isFullscreen && (
+        {!isFullscreen && userRole !== "contacto" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6 2xl:gap-8 2xl:mb-8">
             {/* Tarjeta de Clientes */}
             <Card className="col-span-1">
