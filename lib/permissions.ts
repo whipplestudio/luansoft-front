@@ -111,7 +111,7 @@ export function getLoggedContadorId(): string | null {
     const user = localStorage.getItem("user")
     if (user) {
       const userData = JSON.parse(user)
-      return userData.id
+      return userData.contadorId
     }
     return null
   } catch (error) {

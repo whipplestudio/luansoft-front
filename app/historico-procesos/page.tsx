@@ -269,7 +269,15 @@ export default function HistoricoProcesosPage() {
   const fetchActiveClients = async () => {
     setIsLoadingClients(true)
     try {
-      const response = await axiosInstance.get<ActiveClientsResponse>("/client")
+      // Obtener el ID del contador si el usuario es un contador
+      const userRole = localStorage.getItem("userRole")
+      const contadorId = userRole === "contador" ? getLoggedContadorId() : null
+
+      const response = await axiosInstance.get<ActiveClientsResponse>("/client", {
+        params: {
+          contadorId: contadorId || undefined, // Añadir contadorId como parámetro si existe
+        },
+      })
 
       if (response.data.success) {
         setActiveClients(response.data.data.data)
@@ -495,9 +503,9 @@ export default function HistoricoProcesosPage() {
         const userData = localStorage.getItem("user")
         if (userData) {
           const user = JSON.parse(userData)
-          if (user.id) {
+          if (user.contadorId) {
             // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
-            searchParams.append("contadorId[]", user.id)
+            searchParams.append("contadorId[]", user.contadorId)
           }
         }
       } else if (filters.contadorIds && filters.contadorIds.length > 0) {

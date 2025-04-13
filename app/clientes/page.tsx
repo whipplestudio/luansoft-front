@@ -219,8 +219,8 @@ export default function ClientesPage() {
           const userData = localStorage.getItem("user")
           if (userData) {
             const user = JSON.parse(userData)
-            if (user.id) {
-              params.append("contadorId", user.id)
+            if (user.contadorId) {
+              params.append("contadorId", user.contadorId)
             }
           }
         }

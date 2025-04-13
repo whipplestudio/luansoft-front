@@ -82,7 +82,7 @@ export default function AsignarProcesosPage() {
   // Añadir un nuevo estado para el período de pago
   const [newPaymentPeriod, setNewPaymentPeriod] = useState<"MONTHLY" | "ANNUAL">("MONTHLY")
 
-  // Función para obtener todos los clientes activos para el select
+  // Modificar la función fetchActiveClients para obtener el contadorId inmediatamente
   const fetchActiveClients = useCallback(async () => {
     try {
       const token = localStorage.getItem("accessToken")
@@ -90,12 +90,13 @@ export default function AsignarProcesosPage() {
         throw new Error("No authentication token found")
       }
 
-      // Obtener el ID del contador si el usuario es un contador
+      // Obtener el ID del contador inmediatamente si el usuario es un contador
+      const userRole = localStorage.getItem("userRole")
       const contadorId = userRole === "contador" ? getLoggedContadorId() : null
 
       const response = await axiosInstance.get("/client/active", {
         params: {
-          contadorId: contadorId || undefined, // Enviar contadorId si el usuario es contador
+          contadorId: contadorId || undefined, // Enviar contadorId si existe
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -126,7 +127,7 @@ export default function AsignarProcesosPage() {
       console.error("Error fetching active clients:", error)
       toast.error("Error al cargar los clientes activos")
     }
-  }, [userRole])
+  }, [])
 
   // Función para obtener los procesos desde la API
   const fetchProcesses = useCallback(async () => {
@@ -160,107 +161,104 @@ export default function AsignarProcesosPage() {
   // Modificar la función fetchClientsWithProcesses para adaptarla a la nueva estructura de respuesta de la API
   // Reemplazar la implementación actual de fetchClientsWithProcesses con esta nueva versión:
 
-  const fetchClientsWithProcesses = useCallback(
-    async (page = 1, limit = 10, clientId?: string, processId?: string) => {
-      setIsLoading(true)
-      try {
-        const token = localStorage.getItem("accessToken")
-        if (!token) {
-          throw new Error("No authentication token found")
-        }
+  const fetchClientsWithProcesses = useCallback(async (page = 1, limit = 10, clientId?: string, processId?: string) => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No authentication token found")
+      }
 
-        // Construir los parámetros de la consulta
-        const params: Record<string, any> = {
-          page,
-          limit,
-        }
+      // Construir los parámetros de la consulta
+      const params: Record<string, any> = {
+        page,
+        limit,
+      }
 
-        // Añadir clientId a los parámetros si está definido
-        if (clientId) {
-          params.clientId = clientId
-        }
+      // Añadir clientId a los parámetros si está definido
+      if (clientId) {
+        params.clientId = clientId
+      }
 
-        // Añadir processId a los parámetros si está definido
-        if (processId) {
-          params.processId = processId
-        }
+      // Añadir processId a los parámetros si está definido
+      if (processId) {
+        params.processId = processId
+      }
 
-        // Obtener el ID del contador si el usuario es un contador
-        const contadorId = userRole === "contador" ? getLoggedContadorId() : null
-        if (contadorId) {
-          params.contadorId = contadorId
-        }
+      // Obtener el ID del contador si el usuario es un contador
+      const contadorId = getLoggedContadorId()
+      if (contadorId) {
+        params.contadorId = contadorId
+      }
 
-        const response = await axiosInstance.get("/client/with-processes", {
-          params,
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const response = await axiosInstance.get("/client/with-processes", {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.data.success) {
+        const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
+
+        // Extraer los clientes únicos de las asignaciones
+        const uniqueClients = new Map<string, Client>()
+
+        data.forEach((assignment: any) => {
+          if (assignment.client && !uniqueClients.has(assignment.client.id)) {
+            uniqueClients.set(assignment.client.id, {
+              id: assignment.client.id,
+              company: assignment.client.company,
+              type: assignment.client.type,
+              status: assignment.client.status,
+              regimenFiscalId: assignment.client.regimenFiscalId || null,
+              contador: assignment.client.contador || null,
+              contacto: assignment.client.contacto || null,
+              isAssigned: assignment.client.isAssigned || false,
+              createdAt: assignment.client.createdAt || "",
+              updatedAt: assignment.client.updatedAt || "",
+            })
+          }
         })
 
-        if (response.data.success) {
-          const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
+        // Mapear las asignaciones de procesos directamente desde la respuesta
+        const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
+          id: assignment.id,
+          clientId: assignment.clientId,
+          processId: assignment.processId,
+          commitmentDate: assignment.date,
+          status: assignment.status,
+          graceDays: assignment.graceDays,
+          payrollFrequencies: assignment.payrollFrequencies || [],
+          paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
+          process: {
+            id: assignment.process.id,
+            name: assignment.process.name,
+            description: assignment.process.description,
+            progress: 0,
+            createdAt: assignment.process.createdAt,
+            updatedAt: assignment.process.updatedAt,
+          },
+        }))
 
-          // Extraer los clientes únicos de las asignaciones
-          const uniqueClients = new Map<string, Client>()
-
-          data.forEach((assignment: any) => {
-            if (assignment.client && !uniqueClients.has(assignment.client.id)) {
-              uniqueClients.set(assignment.client.id, {
-                id: assignment.client.id,
-                company: assignment.client.company,
-                type: assignment.client.type,
-                status: assignment.client.status,
-                regimenFiscalId: assignment.client.regimenFiscalId || null,
-                contador: assignment.client.contador || null,
-                contacto: assignment.client.contacto || null,
-                isAssigned: assignment.client.isAssigned || false,
-                createdAt: assignment.client.createdAt || "",
-                updatedAt: assignment.client.updatedAt || "",
-              })
-            }
-          })
-
-          // Mapear las asignaciones de procesos directamente desde la respuesta
-          const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
-            id: assignment.id,
-            clientId: assignment.clientId,
-            processId: assignment.processId,
-            commitmentDate: assignment.date,
-            status: assignment.status,
-            graceDays: assignment.graceDays,
-            payrollFrequencies: assignment.payrollFrequencies || [],
-            paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
-            process: {
-              id: assignment.process.id,
-              name: assignment.process.name,
-              description: assignment.process.description,
-              progress: 0,
-              createdAt: assignment.process.createdAt,
-              updatedAt: assignment.process.updatedAt,
-            },
-          }))
-
-          setClients(Array.from(uniqueClients.values()))
-          setAssignments(assignmentsData)
-          setPagination({
-            page: currentPage || 1,
-            limit: pageLimit || 10,
-            total: total || 0,
-            totalPages: totalPages || 1,
-          })
-        } else {
-          throw new Error(response.data.message || "Error fetching clients with processes")
-        }
-      } catch (error) {
-        console.error("Error fetching clients with processes:", error)
-        toast.error("Error al cargar los clientes con procesos")
-      } finally {
-        setIsLoading(false)
+        setClients(Array.from(uniqueClients.values()))
+        setAssignments(assignmentsData)
+        setPagination({
+          page: currentPage || 1,
+          limit: pageLimit || 10,
+          total: total || 0,
+          totalPages: totalPages || 1,
+        })
+      } else {
+        throw new Error(response.data.message || "Error fetching clients with processes")
       }
-    },
-    [userRole],
-  )
+    } catch (error) {
+      console.error("Error fetching clients with processes:", error)
+      toast.error("Error al cargar los clientes con procesos")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   // Buscar la función fetchUnassignedClients y modificarla para incluir el contadorId cuando el usuario es un contador
   const fetchUnassignedClients = useCallback(async () => {
@@ -703,7 +701,7 @@ export default function AsignarProcesosPage() {
   // Primero, añadamos la función para marcar un proceso como pagado después de la función handleActivateProcess
   // Añadir después de la función handleActivateProcess
 
-  // Reemplazar la función handleMarkAsPaid existente with this new implementation
+  // Reemplazar la función handleMarkAsPaid existente with this nueva implementación
   const handleMarkAsPaid = (assignment: ProcessAssignment) => {
     setProcessingAssignment(assignment)
     setIsUploadDialogOpen(true)
