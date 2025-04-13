@@ -158,7 +158,6 @@ export default function ContactosPage() {
 
   // Función para crear o actualizar un contacto
   const handleSubmitContacto = async (data: any, originalData?: Contacto) => {
-    console.log("🚀 ~ data:", data)
     setIsSubmitting(true)
     try {
       if (originalData) {

@@ -22,6 +22,7 @@ import { debounce } from "@/utils/debounce"
 import axiosInstance from "@/api/config"
 import { hasPermission, type RoleType } from "@/lib/permissions"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { Badge } from "@/components/ui/badge"
 
 export default function ProcesosPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
@@ -45,6 +46,7 @@ export default function ProcesosPage() {
   })
   const [searchTerm, setSearchTerm] = useState("")
 
+  // Modificar la función fetchProcesses para incluir el estado del proceso en los datos mapeados
   const fetchProcesses = useCallback(async (page = 1, limit = 10, name = "") => {
     setIsLoading(true)
     try {
@@ -67,10 +69,11 @@ export default function ProcesosPage() {
       if (response.data.success) {
         const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
 
-        // Mapear los datos para incluir progress si no existe
-        const mappedProcesses = data.map((process: Process) => ({
+        // Mapear los datos para incluir progress y status si no existen
+        const mappedProcesses = data.map((process: any) => ({
           ...process,
           progress: process.progress || 0,
+          status: process.status || "ACTIVE", // Asegurar que status siempre tenga un valor
         }))
 
         setProcesses(mappedProcesses)
@@ -227,7 +230,44 @@ export default function ProcesosPage() {
     }
   }
 
-  // Buscar la definición de columnas y modificar la columna de acciones
+  // Añadir una nueva función para activar un proceso después de la función handleDelete
+  const handleToggleProcessStatus = async (process: Process) => {
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No authentication token found")
+      }
+
+      if (process.status === "ACTIVE") {
+        // Si está activo, desactivarlo (usar la función de eliminar existente)
+        await handleDelete(process)
+      } else {
+        // Si está inactivo, activarlo
+        const response = await axiosInstance.patch(
+          `/process/${process.id}/activate`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        )
+
+        if (response.data.success) {
+          toast.success("Proceso activado exitosamente")
+          fetchProcesses(pagination.page, pagination.limit, searchTerm)
+        } else {
+          throw new Error(response.data.message || "Error activating process")
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling process status:", error)
+      toast.error(process.status === "ACTIVE" ? "Error al desactivar el proceso" : "Error al activar el proceso")
+    }
+  }
+
+  // Modificar la columna de acciones para mostrar "Activar" o "Desactivar" según el estado del proceso
+  // Reemplazar la definición actual de la columna "actions" con esta versión actualizada
   const columns: ColumnDef<Process>[] = [
     {
       accessorKey: "name",
@@ -253,6 +293,19 @@ export default function ProcesosPage() {
         return date ? format(new Date(date), "dd/MM/yyyy", { locale: es }) : "N/A"
       },
     },
+    // Añadir una columna para mostrar el estado del proceso
+    {
+      accessorKey: "status",
+      header: "Estado",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string
+        return (
+          <Badge variant={status === "ACTIVE" ? "default" : "destructive"} className="capitalize">
+            {status === "ACTIVE" ? "Activo" : "Inactivo"}
+          </Badge>
+        )
+      },
+    },
     {
       id: "actions",
       cell: ({ row }) => {
@@ -260,6 +313,7 @@ export default function ProcesosPage() {
         const role = userRole as RoleType | null
         const canEdit = hasPermission(role, "procesos", "edit")
         const canDelete = hasPermission(role, "procesos", "delete")
+        const isActive = process.status === "ACTIVE"
 
         return (
           <DropdownMenu>
@@ -273,8 +327,11 @@ export default function ProcesosPage() {
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               {canEdit && <DropdownMenuItem onClick={() => handleEdit(process)}>Editar</DropdownMenuItem>}
               {canDelete && (
-                <DropdownMenuItem onClick={() => handleDelete(process)} className="text-red-600">
-                  Eliminar
+                <DropdownMenuItem
+                  onClick={() => handleToggleProcessStatus(process)}
+                  className={isActive ? "text-red-600" : "text-green-600"}
+                >
+                  {isActive ? "Desactivar" : "Activar"}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
