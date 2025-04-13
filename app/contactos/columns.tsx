@@ -24,6 +24,11 @@ export const columns = (
     },
   },
   {
+    accessorKey: "lastName",
+    header: "Apellido",
+    cell: () => null, // No mostramos esta columna, solo la usamos para acceder al valor
+  },
+  {
     accessorKey: "email",
     header: "Email",
   },
