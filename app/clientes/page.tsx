@@ -132,7 +132,7 @@ export default function ClientesPage() {
       },
     },
     {
-      accessorKey: "regimenFiscal",
+      accessorKey: "regimenFiscal.nombre",
       header: "Regimen fiscal",
     },
     {
