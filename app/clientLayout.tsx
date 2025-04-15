@@ -38,11 +38,19 @@ export default function ClientLayout({
   }, [])
 
   useEffect(() => {
+    // Verificar si hay un usuario temporal (que debe cambiar su contraseña)
+    const tempUser = localStorage.getItem("tempUser")
+    if (tempUser && pathname !== "/cambiar-contrasena") {
+      // Si hay un usuario temporal y no estamos en la página de cambio de contraseña, redirigir
+      router.push("/cambiar-contrasena")
+      return
+    }
+
     const { auth, role } = checkAuth()
     setIsAuthenticated(auth)
     setUserRole(role)
 
-    if (!auth && pathname !== "/login") {
+    if (!auth && pathname !== "/login" && pathname !== "/cambiar-contrasena") {
       router.push("/login")
     } else if (auth && pathname === "/login") {
       router.push("/")
@@ -56,11 +64,11 @@ export default function ClientLayout({
     }
   }, [])
 
-  if (!isAuthenticated && pathname !== "/login") {
+  if (!isAuthenticated && pathname !== "/login" && pathname !== "/cambiar-contrasena") {
     return null
   }
 
-  const showSideBar = userRole !== "dashboard" 
+  const showSideBar = userRole !== "dashboard"
 
   return (
     <html lang="es">
@@ -68,9 +76,9 @@ export default function ClientLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </head>
       <body className={`${jost.className} ${jost.variable}`}>
-        {isAuthenticated || pathname === "/login" ? (
+        {isAuthenticated || pathname === "/login" || pathname === "/cambiar-contrasena" ? (
           <>
-            {isAuthenticated && pathname !== "/login" ? (
+            {isAuthenticated && pathname !== "/login" && pathname !== "/cambiar-contrasena" ? (
               <SidebarProvider>
                 <div className="group/sidebar-wrapper flex min-h-screen w-full">
                   {showSideBar && <AppSidebar userRole={userRole} />}

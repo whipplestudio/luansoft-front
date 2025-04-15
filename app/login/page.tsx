@@ -5,13 +5,14 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useRouter } from "next/navigation"
-import { Toaster } from "sonner"
+import { Toaster, toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import axiosInstance from "@/api/config"
 import { Logo } from "@/components/Logo"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 
 type UserRole = "ADMINISTRADOR" | "CONTADOR" | "CONTACTO" | "DASHBOARD"
 
@@ -25,6 +26,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const {
     register,
@@ -45,6 +47,16 @@ export default function LoginPage() {
 
       if (response.data.success) {
         const { accessToken, refreshToken, user } = response.data.data
+
+        // Verificar si el usuario debe cambiar su contraseña
+        if (user.mustChangePassword) {
+          // Guardar datos del usuario temporalmente
+          localStorage.setItem("tempUser", JSON.stringify(user))
+
+          // Redirigir a la página de cambio de contraseña
+          router.push("/cambiar-contrasena")
+          return
+        }
 
         // Map the API role to our internal role format
         const roleMapping: Record<UserRole, string> = {
@@ -75,10 +87,14 @@ export default function LoginPage() {
       }
     } catch (error: any) {
       console.error("Error durante el inicio de sesión:", error)
-      // No toast here as it's already handled by the interceptors
+      toast.error(error.response?.data?.message || "Credenciales inválidas")
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword)
   }
 
   return (
@@ -103,11 +119,36 @@ export default function LoginPage() {
             </div>
             <div>
               <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" type="password" {...register("password")} className="border-primary-green/20" />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  {...register("password")}
+                  className="border-primary-green/20 pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={togglePasswordVisibility}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-500" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-500" />
+                  )}
+                </button>
+              </div>
               {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
             </div>
             <Button type="submit" className="w-full bg-primary-green hover:bg-primary-green/90" disabled={isLoading}>
-              {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Iniciando sesión...
+                </>
+              ) : (
+                "Iniciar sesión"
+              )}
             </Button>
           </form>
         </CardContent>
