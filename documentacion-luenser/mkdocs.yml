@@ -1,0 +1,72 @@
+site_name: Documentación Luenser
+site_description: Documentación del sistema de gestión fiscal de Luenser
+site_author: Luenser
+
+# Tema y personalización
+theme:
+  name: material
+  language: es
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+  palette:
+    primary: green
+    accent: green
+  logo: assets/images/logo.png
+  favicon: assets/images/favicon.ico
+
+# Estructura de navegación
+nav:
+  - Inicio: index.md
+  - Guías de Usuario:
+    - Roles:
+      - Dashboard: roles/dashboard.md
+      - Contador: roles/contador.md
+      - Contacto: roles/contacto.md
+      - Administrador: roles/admin.md
+  - Módulos:
+    - Dashboard: modulos/dashboard.md
+    - Usuarios: modulos/usuarios.md
+    - Contadores: modulos/contadores.md
+    - Clientes: modulos/clientes.md
+    - Contactos: modulos/contactos.md
+    - Asignación de contadores: modulos/asignacion-contadores.md
+    - Asignación de clientes a contactos: modulos/asignacion-clientes-a-contactos.md
+    - Procesos: modulos/procesos.md
+    - Asignación de procesos: modulos/asignacion-de-procesos.md
+  - Soporte: soporte.md
+
+# Extensiones Markdown
+markdown_extensions:
+  - admonition
+  - codehilite
+  - footnotes
+  - meta
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+
+# Plugins
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+# Directorios extra para incluir
+extra_css:
+  - assets/css/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/luenser
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/luenser
