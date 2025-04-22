@@ -184,6 +184,7 @@ const InfiniteScrollDisplay = ({
   const totalClients = clients.length
 
   // Calculate optimal number of clients per bulk based on screen size
+  // In the InfiniteScrollDisplay component, replace the useEffect that calculates clientsPerBulk with this:
   useEffect(() => {
     const calculateClientsPerBulk = () => {
       // Get viewport dimensions
@@ -191,23 +192,43 @@ const InfiniteScrollDisplay = ({
       const viewportWidth = window.innerWidth
 
       // Calculate approximate card dimensions (including margins)
-      // These values should match your CSS for the cards
-      const cardHeight = 100 // Reducir la altura aproximada en píxeles
+      const cardHeight = 120 // Increased height to account for full card + margin
       const cardWidth = 250 // Approximate width in pixels
       const cardMargin = 16 // Approximate margin in pixels
 
-      // Calculate how many cards can fit in a row based on viewport width
-      const cardsPerRow = Math.floor(viewportWidth / (cardWidth + cardMargin * 2))
+      // Calculate how many cards can fit in a row based on the current grid layout
+      let cardsPerRow
+      if (viewportWidth >= 1280) {
+        // xl breakpoint (xl:grid-cols-6)
+        cardsPerRow = 6
+      } else if (viewportWidth >= 1024) {
+        // lg breakpoint (lg:grid-cols-4)
+        cardsPerRow = 4
+      } else if (viewportWidth >= 768) {
+        // md breakpoint (md:grid-cols-3)
+        cardsPerRow = 3
+      } else if (viewportWidth >= 640) {
+        // sm breakpoint (sm:grid-cols-2)
+        cardsPerRow = 2
+      } else {
+        cardsPerRow = 1
+      }
 
-      // Calculate how many rows can fit in the viewport
-      const availableHeight = viewportHeight - 150 // Subtract header/footer space
+      // Calculate available height for cards (subtract header/footer/navigation space)
+      const headerHeight = 150 // Increased header height to account for navigation and padding
+      const availableHeight = viewportHeight - headerHeight
+
+      // Calculate how many complete rows can fit in the available height
       const rowsPerScreen = Math.floor(availableHeight / (cardHeight + cardMargin * 2))
 
-      // Calculate total cards that can fit on screen
-      const optimalCardsPerScreen = cardsPerRow * rowsPerScreen
+      // Subtract 1 row to ensure no cards are cut off at the bottom
+      const safeRowsPerScreen = Math.max(1, rowsPerScreen - 1)
 
-      // Ensure we have at least 6 cards per bulk
-      return Math.max(optimalCardsPerScreen, 6)
+      // Calculate total cards that can fit on screen without scrolling or being cut off
+      const optimalCardsPerScreen = cardsPerRow * safeRowsPerScreen
+
+      // Ensure we have at least 1 row of cards
+      return Math.max(optimalCardsPerScreen, cardsPerRow)
     }
 
     // Set initial value
@@ -255,7 +276,7 @@ const InfiniteScrollDisplay = ({
   const currentBulk = clientBulks[currentBulkIndex] || []
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)]">
+    <div className="flex flex-col h-[calc(100vh-120px)] px-4">
       <div className="flex justify-between items-center mb-4">
         <div className="text-lg font-semibold">
           Mostrando clientes {currentBulkIndex * clientsPerBulk + 1} -{" "}
@@ -270,10 +291,13 @@ const InfiniteScrollDisplay = ({
           ))}
         </div>
       </div>
-
       <div
         className={`card-grid-container grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 md:gap-6 transition-opacity duration-500 ease-in-out ${isVisible ? "opacity-100" : "opacity-0"}`}
-        style={{ gridAutoRows: "min-content" }}
+        style={{
+          gridAutoRows: "min-content",
+          maxHeight: "calc(100vh - 180px)", // Increased space to prevent cut-off
+          overflow: "hidden", // Prevent scrolling within the container
+        }}
       >
         {currentBulk.map((item: FiscalDeliverable) => (
           <Card

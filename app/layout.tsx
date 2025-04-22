@@ -8,7 +8,14 @@ export const metadata = {
   title: "Luenser CMS Fiscal",
   description: "Sistema de gestión fiscal para contadores y clientes",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      {
+        url: "/images/logo-vert-green.png",
+        href: "/images/logo-vert-green.png",
+      },
+    ],
+    shortcut: "/images/logo-vert-green.png",
+    apple: "/images/logo-vert-green.png",
   },
 }
 
@@ -19,4 +26,3 @@ export default function RootLayout({
 }) {
   return <ClientLayout>{children}</ClientLayout>
 }
-

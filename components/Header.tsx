@@ -1,17 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { User, LogOut, Settings } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { LogOut } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { User as UserType } from "@/types"
 import { useRouter } from "next/navigation"
 import { Logo } from "@/components/Logo"
@@ -94,8 +87,14 @@ export function Header({ userRole }: { userRole: string | null }) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
-              <AvatarImage src={user.avatar || `/placeholder.svg?height=32&width=32`} alt={user.name} />
-              <AvatarFallback className="bg-primary-green text-white">{user.name.charAt(0)}</AvatarFallback>
+              <AvatarFallback className="bg-primary-green text-white">
+                {user.name
+                  .split(" ")
+                  .map((name) => name.charAt(0))
+                  .join("")
+                  .substring(0, 2)
+                  .toUpperCase()}
+              </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
