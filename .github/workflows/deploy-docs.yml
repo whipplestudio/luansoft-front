@@ -52,5 +52,4 @@ jobs:
             --confirm \
             --force \
             --token $VERCEL_TOKEN \
-            --scope angelhpulido \
             --name luens-docs
