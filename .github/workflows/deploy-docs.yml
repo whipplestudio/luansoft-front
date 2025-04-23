@@ -55,4 +55,4 @@ jobs:
             --force \
             --token $VERCEL_TOKEN \
             --scope angelhpulido \
-            --name luensoft-doc
+            --name luens-docs
