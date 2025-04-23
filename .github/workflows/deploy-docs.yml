@@ -50,6 +50,4 @@ jobs:
             --prod \
             --confirm \
             --force \
-            --token $VERCEL_TOKEN \
-            --org   $VERCEL_ORG_ID \
-            --project $VERCEL_PROJECT_ID
+            --token $VERCEL_TOKEN
