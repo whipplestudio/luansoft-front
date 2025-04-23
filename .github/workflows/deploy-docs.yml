@@ -11,6 +11,7 @@ on:
 jobs:
   deploy-to-vercel:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -40,11 +41,17 @@ jobs:
         working-directory: documentacion-luenser/public
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          # Borramos config local por si acaso
           rm -rf .vercel
+
+          # Deploy totalmente desatendido al proyecto correcto
           vercel deploy \
+            --token $VERCEL_TOKEN \
             --prod \
             --confirm \
             --force \
-            --token $VERCEL_TOKEN \
-            --name luens-docs
+            --org $VERCEL_ORG_ID \
+            --project $VERCEL_PROJECT_ID
