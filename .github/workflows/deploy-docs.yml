@@ -44,15 +44,11 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          # Remove any previous Vercel config to avoid stale linking
           rm -rf .vercel
-
-          # Deploy explicitly to your personal scope and project name,
-          # forcing a fresh update of public/
           vercel deploy \
-            --prod \
-            --confirm \
-            --force \
-            --token $VERCEL_TOKEN \
-            --scope angelhpulido \
-            --name luens-docs
++           --prod \
++           --confirm \
++           --force \
++           --token $VERCEL_TOKEN \
++           --scope elpulido96s-projects \
++           --name luensoft-doc
