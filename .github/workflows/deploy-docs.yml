@@ -50,4 +50,4 @@ jobs:
             --confirm \
             --force \
             --token $VERCEL_TOKEN \
-            --name luens-docs
+            --name luensoft-doc
