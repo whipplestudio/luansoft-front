@@ -11,7 +11,6 @@ on:
 jobs:
   deploy-to-vercel:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -29,6 +28,9 @@ jobs:
         working-directory: documentacion-luenser
         run: mkdocs build --clean -d public
 
+      - name: List public folder
+        run: ls -R documentacion-luenser/public
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
@@ -41,17 +43,16 @@ jobs:
         working-directory: documentacion-luenser/public
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          # Borramos config local por si acaso
+          # Remove any previous Vercel config to avoid stale linking
           rm -rf .vercel
 
-          # Deploy totalmente desatendido al proyecto correcto
+          # Deploy explicitly to your personal scope and project name,
+          # forcing a fresh update of public/
           vercel deploy \
-            --token $VERCEL_TOKEN \
             --prod \
             --confirm \
             --force \
-            --org $VERCEL_ORG_ID \
-            --project $VERCEL_PROJECT_ID
+            --token $VERCEL_TOKEN \
+            --scope angelhpulido \
+            --name luensoft-doc
