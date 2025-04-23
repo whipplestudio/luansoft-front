@@ -5,12 +5,15 @@ on:
     branches:
       - main
     paths:
-      - 'documentacion-luenser/**'              
-      - '.github/workflows/deploy-docs.yml'   
+      - 'documentacion-luenser/**'
+      - '.github/workflows/deploy-docs.yml'
 
 jobs:
   deploy-to-vercel:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -21,12 +24,14 @@ jobs:
           python-version: '3.x'
 
       - name: Install MkDocs & plugins
-        run: |
-          pip install mkdocs mkdocs-material mkdocs-minify-plugin
+        run: pip install mkdocs mkdocs-material mkdocs-minify-plugin
 
       - name: Build MkDocs site
         working-directory: documentacion-luenser
         run: mkdocs build --clean -d public
+
+      - name: 🔍 Debug: List public folder
+        run: ls -R documentacion-luenser/public
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -38,7 +43,4 @@ jobs:
 
       - name: Deploy to Vercel
         working-directory: documentacion-luenser/public
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          vercel --prod --confirm --token $VERCEL_TOKEN
+        run: vercel --prod --confirm
