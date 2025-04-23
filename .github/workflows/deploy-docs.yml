@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/deploy-docs.yml'    
+      - 'documentacion-luenser/**'              
+      - '.github/workflows/deploy-docs.yml'   
 
 jobs:
   deploy-to-vercel:
