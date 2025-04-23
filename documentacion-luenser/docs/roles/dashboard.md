@@ -2,7 +2,7 @@
 
 ## Introducción
 
-Este documento describe los módulos y funcionalidades disponibles para los usuarios con el rol de **Dashboard** en el sistema de gestión fiscal de Luenser. El rol de Dashboard está diseñado para proporcionar acceso de solo visualización a información clave del sistema, permitiendo monitorear métricas y estadísticas sin la capacidad de modificar datos.
+EsteEsteEsteEsteEsteEsteEste documento describe los módulos y funcionalidades disponibles para los usuarios con el rol de **Dashboard** en el sistema de gestión fiscal de Luenser. El rol de Dashboard está diseñado para proporcionar acceso de solo visualización a información clave del sistema, permitiendo monitorear métricas y estadísticas sin la capacidad de modificar datos.
 
 ## Resumen de Permisos
 
