@@ -46,8 +46,11 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          rm -rf .vercel
           vercel deploy \
             --prod \
             --confirm \
             --force \
-            --token $VERCEL_TOKEN
+            --token $VERCEL_TOKEN \
+            --scope angelhpulido \
+            --name luens-docs
