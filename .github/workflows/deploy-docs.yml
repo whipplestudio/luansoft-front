@@ -1,0 +1,30 @@
+name: 📚 Deploy MkDocs to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false   
+          fetch-depth: 0             
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install MkDocs + tema
+        run: pip install mkdocs mkdocs-material
+
+      - name: Build & Deploy
+        working-directory: documentacion-luenser
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mkdocs gh-deploy --clean --remote-name origin
