@@ -46,9 +46,9 @@ jobs:
         run: |
           rm -rf .vercel
           vercel deploy \
-+           --prod \
-+           --confirm \
-+           --force \
-+           --token $VERCEL_TOKEN \
-+           --scope elpulido96s-projects \
-+           --name luensoft-doc
+            --prod \
+            --confirm \
+            --force \
+            --token $VERCEL_TOKEN \
+            --scope elpulido96s-projects \
+            --name luensoft-doc
