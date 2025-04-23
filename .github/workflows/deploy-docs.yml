@@ -20,8 +20,11 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install MkDocs + tema
-        run: pip install mkdocs mkdocs-material
+      - name: Install MkDocs + tema + plugins
+        run: |
+          pip install mkdocs
+          pip install mkdocs-material
+          pip install mkdocs-minify-plugin
 
       - name: Build & Deploy
         working-directory: documentacion-luenser
