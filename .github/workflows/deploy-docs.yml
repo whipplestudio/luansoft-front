@@ -28,6 +28,12 @@ jobs:
         working-directory: documentacion-luenser
         run: mkdocs build --clean -d public
 
+      - name: Debug: List built files
+        working-directory: documentacion-luenser/public
+        run: |
+          echo ">>> Contenido de documentacion-luenser/public <<<"
+          ls -R .
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
