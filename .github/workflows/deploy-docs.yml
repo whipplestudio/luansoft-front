@@ -28,7 +28,7 @@ jobs:
         working-directory: documentacion-luenser
         run: mkdocs build --clean -d public
       
-      - name: 🔍 Debug: List public folder
+      - name: List public folder
         run: ls -R documentacion-luenser/public
 
       - name: Set up Node.js
