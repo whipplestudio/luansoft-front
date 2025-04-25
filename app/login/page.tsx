@@ -35,9 +35,13 @@ export default function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "a.pulido@whipple.com",
-      password: "Admin12345.",
+      email: "",
+      password: "",
     },
+    // defaultValues: {
+    //   email: "a.pulido@whipple.com",
+    //   password: "Admin12345.",
+    // },
   })
 
   const onSubmit = async (data: LoginFormData) => {
