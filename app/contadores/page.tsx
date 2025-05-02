@@ -28,10 +28,24 @@ import { ProtectedRoute } from "@/components/ProtectedRoute"
 export default function ContadoresPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const role = localStorage.getItem("userRole")
     setUserRole(role)
+
+    // Obtener el email y el ID del usuario logueado
+    try {
+      const userStr = localStorage.getItem("user")
+      if (userStr) {
+        const userData = JSON.parse(userStr)
+        setUserEmail(userData.email)
+        setUserId(userData.id)
+      }
+    } catch (error) {
+      console.error("Error al obtener datos del usuario:", error)
+    }
   }, [])
 
   const [contadores, setContadores] = useState<Contador[]>([])
@@ -213,6 +227,11 @@ export default function ContadoresPage() {
         const canEdit = hasPermission(role, "contadores", "edit")
         const canDelete = hasPermission(role, "contadores", "delete")
 
+        // Si el usuario es contador, solo mostrar acciones en su propia fila
+        if (role === "contador" && contador.email !== userEmail && contador.id !== userId) {
+          return null // No mostrar el botón de acciones para otras filas
+        }
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -223,7 +242,8 @@ export default function ContadoresPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              {canEdit && (
+              {/* Si es contador, solo mostrar "Ver detalles" en su propia fila */}
+              {role !== "contador" && canEdit && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation()
@@ -241,7 +261,7 @@ export default function ContadoresPage() {
               >
                 Ver detalles
               </DropdownMenuItem>
-              {canDelete && contador.status === "active" && (
+              {role !== "contador" && canDelete && contador.status === "active" && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation()

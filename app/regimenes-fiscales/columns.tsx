@@ -45,6 +45,14 @@ export const columns = ({ onEdit, onToggleStatus }: ColumnOptions): ColumnDef<Re
     cell: ({ row }) => {
       const regimenFiscal = row.original
 
+      // Obtener el rol del usuario del localStorage
+      const userRole = typeof window !== "undefined" ? localStorage.getItem("userRole") : null
+
+      // Si el usuario es contador, no mostrar el menú de acciones
+      if (userRole === "contador") {
+        return null
+      }
+
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

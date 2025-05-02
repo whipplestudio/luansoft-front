@@ -338,6 +338,21 @@ const getLoggedContactoId = () => {
   }
 }
 
+// Function to get the logged contador id
+const getLoggedContadorId = () => {
+  try {
+    const userData = localStorage.getItem("user")
+    if (userData) {
+      const user = JSON.parse(userData)
+      return user.contadorId || null
+    }
+    return null
+  } catch (error) {
+    console.error("Error al obtener el ID del contador:", error)
+    return null
+  }
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -496,13 +511,20 @@ export default function DashboardPage() {
         limit,
       }
 
-      // Verificar si el usuario es un contacto y añadir su ID como filtro
+      // Verificar el rol del usuario y aplicar filtros específicos
       const userRole = localStorage.getItem("userRole")
+
       if (userRole === "contacto") {
         const contactoId = getLoggedContactoId()
         if (contactoId) {
           // Si ya hay contactoIds en los filtros, ignorarlos y usar solo el ID del usuario
           params.contactoIds = [contactoId]
+        }
+      } else if (userRole === "contador") {
+        const contadorId = getLoggedContadorId()
+        if (contadorId) {
+          // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
+          params.contadorIds = [contadorId]
         }
       } else {
         // Añadir filtros si existen
@@ -654,7 +676,7 @@ export default function DashboardPage() {
       statuses: [],
       contadorIds: [],
       processIds: [],
-      contactoIds: [], // Change from contactIds to contactoIds
+      contactoIds: [],
     }
 
     // Si el usuario es un contacto, mantener su ID en los filtros
@@ -663,6 +685,13 @@ export default function DashboardPage() {
       const contactoId = getLoggedContactoId()
       if (contactoId) {
         emptyFilters.contactoIds = [contactoId]
+      }
+    }
+    // Si el usuario es un contador, mantener su ID en los filtros
+    else if (userRole === "contador") {
+      const contadorId = getLoggedContadorId()
+      if (contadorId) {
+        emptyFilters.contadorIds = [contadorId]
       }
     }
 
@@ -694,8 +723,9 @@ export default function DashboardPage() {
     const [companyNameInput, setCompanyNameInput] = useState(filters.companyName)
     const [localUserRole, setLocalUserRole] = useState<string | null>(null)
     const [contactoId, setContactoId] = useState<string | null>(null)
+    const [contadorId, setContadorId] = useState<string | null>(null)
 
-    // Obtener el rol del usuario y el ID del contacto si aplica
+    // Obtener el rol del usuario, el ID del contacto y el ID del contador si aplica
     useEffect(() => {
       const role = localStorage.getItem("userRole")
       setLocalUserRole(role)
@@ -705,12 +735,20 @@ export default function DashboardPage() {
         setContactoId(contactId)
 
         // Si es rol contacto, establecer automáticamente el filtro de contacto
-        // SOLO si no está ya establecido para evitar bucles infinitos
         if (contactId && (!filters.contactoIds || !filters.contactoIds.includes(contactId))) {
           handleFilter("contactoIds", [contactId])
         }
+      } else if (role === "contador") {
+        // Si es rol contador, obtener su ID y establecerlo como filtro
+        const contId = getLoggedContadorId()
+        setContadorId(contId)
+
+        // Establecer automáticamente el filtro de contador
+        if (contId && (!filters.contadorIds || !filters.contadorIds.includes(contId))) {
+          handleFilter("contadorIds", [contId])
+        }
       }
-    }, [filters.contactoIds, handleFilter]) // Eliminar handleFilter de las dependencias para evitar el bucle
+    }, [filters.contactoIds, filters.contadorIds, handleFilter])
 
     // Manejar cambio en el input de empresa con debounce
     const handleCompanyNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -773,16 +811,28 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="contadorIds">Responsables</Label>
-          <SearchableSelect
-            options={allContadores.map((contador) => ({ label: contador.name, value: contador.id }))}
-            selected={filters.contadorIds}
-            onChange={(selected) => handleFilter("contadorIds", selected)}
-            multiple={true}
-            placeholder="Seleccionar responsables"
-          />
-        </div>
+
+        {/* Mostrar selector de responsables solo si el usuario NO es un contador */}
+        {localUserRole !== "contador" ? (
+          <div className="space-y-2">
+            <Label htmlFor="contadorIds">Responsables</Label>
+            <SearchableSelect
+              options={allContadores.map((contador) => ({ label: contador.name, value: contador.id }))}
+              selected={filters.contadorIds}
+              onChange={(selected) => handleFilter("contadorIds", selected)}
+              multiple={true}
+              placeholder="Seleccionar responsables"
+            />
+          </div>
+        ) : (
+          // Para contadores, mostrar un mensaje informativo en lugar del selector
+          <div className="space-y-2">
+            <Label>Responsable</Label>
+            <div className="text-sm p-2 bg-gray-100 rounded border border-gray-200">
+              Solo puedes ver tus clientes asignados
+            </div>
+          </div>
+        )}
 
         {/* Mostrar selector de contactos solo si el usuario NO es un contacto */}
         {localUserRole !== "contacto" ? (
@@ -891,6 +941,21 @@ export default function DashboardPage() {
       }
     }
   }, [userRole]) // Solo se ejecuta cuando cambia
+
+  // Añadir este useEffect después del useEffect que establece userRole y contactoId
+  useEffect(() => {
+    // Si el usuario es un contador, establecer su ID en los filtros iniciales
+    if (userRole === "contador") {
+      const contadorId = getLoggedContadorId()
+      if (contadorId && !filters.contadorIds.includes(contadorId)) {
+        // Actualizar los filtros sin desencadenar una nueva renderización
+        setFilters((prevFilters) => ({
+          ...prevFilters,
+          contadorIds: [contadorId],
+        }))
+      }
+    }
+  }, [userRole]) // Solo se ejecuta cuando cambia el rol
 
   // Define fetchData outside of the conditional rendering
   const fetchData = useCallback(async () => {
