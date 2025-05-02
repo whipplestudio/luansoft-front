@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import axiosInstance from "@/api/config"
 import { Logo } from "@/components/Logo"
 import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 
 type UserRole = "ADMINISTRADOR" | "CONTADOR" | "CONTACTO" | "DASHBOARD"
 
@@ -27,6 +29,9 @@ export default function LoginPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
+  const [resetEmailSent, setResetEmailSent] = useState(false)
+  const [resetEmailLoading, setResetEmailLoading] = useState(false)
 
   const {
     register,
@@ -35,13 +40,20 @@ export default function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: "a.pulido@whipple.com",
+      password: "Admin12345.",
     },
-    // defaultValues: {
-    //   email: "a.pulido@whipple.com",
-    //   password: "Admin12345.",
-    // },
+  })
+
+  const resetPasswordForm = useForm<{ email: string }>({
+    resolver: zodResolver(
+      z.object({
+        email: z.string().email("Correo electrónico inválido"),
+      }),
+    ),
+    defaultValues: {
+      email: "",
+    },
   })
 
   const onSubmit = async (data: LoginFormData) => {
@@ -101,6 +113,27 @@ export default function LoginPage() {
     setShowPassword(!showPassword)
   }
 
+  const handleResetPasswordRequest = async (data: { email: string }) => {
+    setResetEmailLoading(true)
+    try {
+      const response = await axiosInstance.post("/auth/request-reset-with-token", {
+        email: data.email,
+      })
+
+      if (response.data.success) {
+        setResetEmailSent(true)
+        toast.success("Se ha enviado un correo con instrucciones para restablecer tu contraseña")
+      } else {
+        throw new Error(response.data.message || "Error al solicitar restablecimiento de contraseña")
+      }
+    } catch (error: any) {
+      console.error("Error al solicitar restablecimiento:", error)
+      toast.error(error.response?.data?.message || "No se pudo enviar el correo de recuperación")
+    } finally {
+      setResetEmailLoading(false)
+    }
+  }
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-light-gray">
       <Toaster position="top-center" />
@@ -144,6 +177,15 @@ export default function LoginPage() {
               </div>
               {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
             </div>
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={() => setForgotPasswordOpen(true)}
+                className="text-sm text-primary-green hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
             <Button type="submit" className="w-full bg-primary-green hover:bg-primary-green/90" disabled={isLoading}>
               {isLoading ? (
                 <>
@@ -157,6 +199,61 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recuperar contraseña</DialogTitle>
+            <DialogDescription>
+              {!resetEmailSent
+                ? "Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña."
+                : "Hemos enviado un correo con instrucciones para restablecer tu contraseña."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!resetEmailSent ? (
+            <Form {...resetPasswordForm}>
+              <form onSubmit={resetPasswordForm.handleSubmit(handleResetPasswordRequest)} className="space-y-4">
+                <FormField
+                  control={resetPasswordForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Correo electrónico</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" placeholder="correo@ejemplo.com" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" disabled={resetEmailLoading}>
+                  {resetEmailLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    "Enviar correo de recuperación"
+                  )}
+                </Button>
+              </form>
+            </Form>
+          ) : (
+            <div className="text-center py-4">
+              <p className="mb-4">Revisa tu bandeja de entrada y sigue las instrucciones del correo.</p>
+              <Button
+                onClick={() => {
+                  setForgotPasswordOpen(false)
+                  setResetEmailSent(false)
+                  resetPasswordForm.reset()
+                }}
+              >
+                Volver al inicio de sesión
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

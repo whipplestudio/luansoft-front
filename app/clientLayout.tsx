@@ -9,7 +9,7 @@ import { LottieLoader } from "@/components/LottieLoader"
 import { useLoading } from "@/hooks/useLoading"
 import type { User } from "@/types"
 import { usePathname, useRouter } from "next/navigation"
-import type React from "react" // Added import for React
+import type React from "react"
 
 // Load Jost font with all the weights we need
 const jost = Jost({
@@ -50,7 +50,13 @@ export default function ClientLayout({
     setIsAuthenticated(auth)
     setUserRole(role)
 
-    if (!auth && pathname !== "/login" && pathname !== "/cambiar-contrasena") {
+    // Lista de rutas públicas que no requieren autenticación
+    const publicRoutes = ["/login", "/cambiar-contrasena", "/reset-password"]
+
+    // Verificar si la ruta actual es pública
+    const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+
+    if (!auth && !isPublicRoute) {
       router.push("/login")
     } else if (auth && pathname === "/login") {
       router.push("/")
@@ -64,7 +70,13 @@ export default function ClientLayout({
     }
   }, [])
 
-  if (!isAuthenticated && pathname !== "/login" && pathname !== "/cambiar-contrasena") {
+  // Lista de rutas públicas que no requieren autenticación
+  const publicRoutes = ["/login", "/cambiar-contrasena", "/reset-password"]
+
+  // Verificar si la ruta actual es pública
+  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+
+  if (!isAuthenticated && !isPublicRoute) {
     return null
   }
 
@@ -76,9 +88,9 @@ export default function ClientLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </head>
       <body className={`${jost.className} ${jost.variable}`}>
-        {isAuthenticated || pathname === "/login" || pathname === "/cambiar-contrasena" ? (
+        {isAuthenticated || isPublicRoute ? (
           <>
-            {isAuthenticated && pathname !== "/login" && pathname !== "/cambiar-contrasena" ? (
+            {isAuthenticated && !isPublicRoute ? (
               <SidebarProvider>
                 <div className="group/sidebar-wrapper flex min-h-screen w-full">
                   {showSideBar && <AppSidebar userRole={userRole} />}
