@@ -40,8 +40,8 @@ export default function LoginPage() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "a.pulido@whipple.com",
-      password: "Admin12345.",
+      email: "",
+      password: "",
     },
   })
 
