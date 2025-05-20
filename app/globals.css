@@ -106,6 +106,31 @@
   padding: 2rem;
 }
 
+/* Ajustes para las tarjetas en modo de pantalla completa */
+.fullscreen-mode .card {
+  height: auto !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.fullscreen-mode .card-content {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Optimizar el espacio vertical en pantalla completa */
+.fullscreen-mode .grid {
+  grid-auto-rows: min-content;
+}
+
+/* Asegurar que las tarjetas no se estiren */
+.card-grid-container {
+  display: grid;
+  grid-template-rows: min-content;
+  grid-auto-rows: min-content;
+}
+
 /* Optimize space for desktop view */
 @media (min-width: 1024px) {
   .container {
@@ -286,57 +311,4 @@
 
 .border-yellow-300 {
   border-color: rgba(153, 133, 66, 0.3);
-}
-
-/* Fix for label overlapping with input border */
-.form-label {
-  position: relative;
-  z-index: 10;
-  background-color: white;
-  padding: 0 0.25rem;
-  margin-left: -0.25rem;
-}
-
-/* Ensure labels are always above input borders */
-label {
-  position: relative;
-  z-index: 10;
-}
-
-/* Fix for input focus state */
-input:focus,
-textarea:focus,
-select:focus {
-  position: relative;
-  z-index: 1;
-}
-
-/* Fix for floating labels in form fields */
-.form-field {
-  position: relative;
-}
-
-.form-field label {
-  position: relative;
-  z-index: 10;
-  background-color: white;
-  padding: 0 0.25rem;
-  margin-left: 0.5rem;
-  display: inline-block;
-}
-
-/* Fix specifically for shadcn/ui components */
-.relative > .peer:focus ~ label,
-.relative > .peer:not(:placeholder-shown) ~ label {
-  z-index: 20;
-  background-color: white;
-  padding: 0 0.25rem;
-}
-
-/* Fix for input borders */
-.border,
-.border-input,
-.border-primary-green\/20 {
-  position: relative;
-  z-index: 5;
 }
