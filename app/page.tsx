@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { ArrowUpDown, Filter, Maximize, Minimize, Grid, List, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,9 +44,7 @@ interface ApiResponse {
   message?: string
 }
 
-// Find the mapApiClientToFiscalDeliverable function and replace it with this updated version
-// that properly handles null contacto and contador objects
-
+// Actualizar la función mapApiClientToFiscalDeliverable para incluir la información del archivo
 const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable => {
   const completionPercentage = parseCompletionPercentage(client.completionPercentage)
 
@@ -63,6 +61,7 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
     progress: p.status === "PAID" ? 100 : p.deliveryStatus === "onTime" ? 50 : 0,
     dueDate: p.commitmentDate,
     deliveryStatus: p.deliveryStatus, // Añadir el deliveryStatus al proceso
+    file: p.file, // Añadir la información del archivo
   }))
 
   return {
@@ -182,6 +181,7 @@ const InfiniteScrollDisplay = ({
   const [clientsPerBulk, setClientsPerBulk] = useState(12) // Default value
   const [isVisible, setIsVisible] = useState(true) // Add this state for fade effect
   const totalClients = clients.length
+  const timerRef = useRef<NodeJS.Timeout | null>(null) // Use useRef to hold the timer
 
   // Calculate optimal number of clients per bulk based on screen size
   // In the InfiniteScrollDisplay component, replace the useEffect that calculates clientsPerBulk with this:
@@ -256,7 +256,7 @@ const InfiniteScrollDisplay = ({
   )
 
   // Auto-scroll to the next bulk after a certain time with fade effect
-  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null)
+  // const [timer, setTimer] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -271,14 +271,14 @@ const InfiniteScrollDisplay = ({
       }, 500) // This should match the CSS transition duration
     }, BULK_DISPLAY_TIME)
 
-    setTimer(interval)
+    timerRef.current = interval // Store the interval in the ref
 
     return () => {
-      if (timer) {
-        clearInterval(timer)
+      if (timerRef.current) {
+        clearInterval(timerRef.current) // Clear the interval using the ref
       }
     }
-  }, [totalBulks, timer])
+  }, [totalBulks])
 
   // Get the current bulk of clients to display
   const currentBulk = clientBulks[currentBulkIndex] || []

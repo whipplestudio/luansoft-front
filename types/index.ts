@@ -16,7 +16,15 @@ export interface Contador extends User {
   clientDetails?: any[] // Detalles completos de los clientes
 }
 
-// Añadir el campo dueDate a la interfaz Process
+// Añadir la interfaz FileInfo para representar la información del archivo
+export interface FileInfo {
+  id: string
+  originalName: string
+  url: string
+  type: string
+}
+
+// Actualizar la interfaz Process para incluir la propiedad file
 export interface Process {
   id: string
   name: string
@@ -28,6 +36,7 @@ export interface Process {
   dueDate?: string // Añadir campo para fecha de vencimiento
   deliveryStatus?: "onTime" | "atRisk" | "delayed" | "completed" // Añadir el campo deliveryStatus y el estado completed
   commitmentDate?: string
+  file?: FileInfo
 }
 
 // Actualizo la interfaz Client para incluir el regimenFiscalId
@@ -48,11 +57,13 @@ export interface Client {
     email: string
     phone: string | null
   } | null
-  regimenFiscal: {
-    id: string,
-    nombre: string
-    descripcion: string
-  } | string
+  regimenFiscal:
+    | {
+        id: string
+        nombre: string
+        descripcion: string
+      }
+    | string
   isAssigned?: boolean
   createdAt: string
   updatedAt: string
@@ -105,6 +116,7 @@ export interface Notification {
 
 export type SemaphoreStatus = "green" | "yellow" | "red"
 
+// Actualizar la interfaz ApiClient para incluir la información del archivo en los procesos
 export interface ApiClient {
   id: string
   company: string
@@ -129,6 +141,12 @@ export interface ApiClient {
     commitmentDate: string
     status: string
     deliveryStatus: "onTime" | "atRisk" | "delayed" | "completed"
+    file?: {
+      id: string
+      originalName: string
+      url: string
+      type: string
+    }
   }[]
   completionPercentage: string
 }

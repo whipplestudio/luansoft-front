@@ -25,6 +25,11 @@ export function DocumentViewerModal({
   fileName,
   onDownload,
 }: DocumentViewerModalProps) {
+  console.log("🚀 ~ fileName:", fileName)
+  console.log("🚀 ~ title:", title)
+  console.log("🚀 ~ documentType:", documentType)
+  console.log("🚀 ~ documentUrl:", documentUrl)
+  console.log("🚀 ~ isOpen:", isOpen)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
 

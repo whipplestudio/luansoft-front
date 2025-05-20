@@ -1,3 +1,5 @@
+"use client"
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { format, isValid } from "date-fns"
 import { es } from "date-fns/locale"
@@ -5,7 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ProgressBar } from "@/components/ProgressBar"
 import type { FiscalDeliverable } from "@/types"
-import { CalendarIcon } from "lucide-react"
+import { CalendarIcon, Eye, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { DocumentViewerModal } from "@/components/DocumentViewerModal"
+import { axiosInstance } from "@/lib/axios"
+import { toast } from "sonner"
 
 interface ClientDetailDialogProps {
   isOpen: boolean
@@ -13,7 +20,117 @@ interface ClientDetailDialogProps {
   client: FiscalDeliverable | null
 }
 
+// Interfaz para la respuesta de la API de URL de descarga
+interface DownloadUrlResponse {
+  success: boolean
+  message: string
+  errorCode: string | null
+  data: {
+    url: string
+  }
+}
+
 export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDialogProps) {
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null)
+  const [documentType, setDocumentType] = useState<"pdf" | "image">("pdf")
+  const [documentTitle, setDocumentTitle] = useState<string>("")
+  const [isDocumentViewerOpen, setIsDocumentViewerOpen] = useState(false)
+  const [fileName, setFileName] = useState<string>("")
+  const [fileId, setFileId] = useState<string>("")
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Obtener el rol del usuario desde localStorage
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
+  // Función para obtener la URL de descarga de un archivo
+  const getFileDownloadUrl = async (fileId: string): Promise<string | null> => {
+    try {
+      setIsLoading(true)
+      const response = await axiosInstance.get<DownloadUrlResponse>(`/file/${fileId}/download-url`)
+
+      if (response.data.success && response.data.data.url) {
+        return response.data.data.url
+      } else {
+        toast.error(`Error al obtener la URL del archivo: ${response.data.message}`)
+        return null
+      }
+    } catch (error) {
+      console.error("Error al obtener la URL de descarga:", error)
+      toast.error("No se pudo obtener la URL del archivo")
+      return null
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Función para abrir el visor de documentos
+  const openDocumentViewer = async (process: any) => {
+    if (process.file) {
+      setIsLoading(true)
+      try {
+        // Obtener la URL de descarga válida
+        const downloadUrl = await getFileDownloadUrl(process.file.id)
+
+        if (downloadUrl) {
+          setDocumentUrl(downloadUrl)
+          setDocumentType(process.file.type.includes("pdf") ? "pdf" : "image")
+          setDocumentTitle(process.name)
+          setFileName(process.file.originalName || `${process.name}.pdf`)
+          setFileId(process.file.id)
+          setIsDocumentViewerOpen(true)
+        } else {
+          toast.error("No se pudo obtener la URL del documento")
+        }
+      } catch (error) {
+        console.error("Error al preparar el documento para visualización:", error)
+        toast.error("Error al preparar el documento para visualización")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }
+
+  // Función para descargar el documento
+  const handleDownload = async () => {
+    try {
+      setIsLoading(true)
+      if (!fileId) {
+        toast.error("ID de archivo no disponible")
+        return
+      }
+
+      const url = await getFileDownloadUrl(fileId)
+
+      if (url) {
+        // Realizar la petición para obtener el archivo como blob
+        const response = await axiosInstance.get(url, { responseType: "blob" })
+        // Crear un objeto Blob a partir de la respuesta
+        const blob = new Blob([response.data])
+        // Crear un URL de objeto para el blob
+        const blobUrl = window.URL.createObjectURL(blob)
+        // Crear un enlace de descarga
+        const link = document.createElement("a")
+        link.href = blobUrl
+        link.setAttribute("download", fileName)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(blobUrl)
+      } else {
+        toast.error("No se pudo obtener la URL de descarga")
+      }
+    } catch (error) {
+      console.error("Error al descargar el archivo:", error)
+      toast.error("No se pudo descargar el archivo")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (!client) return null
 
   // Modificar la función getNearestDueDate para filtrar procesos no completados
@@ -108,7 +225,7 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">{client.company}</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">{client.client}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-6 py-4">
           <div>
@@ -133,7 +250,24 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
                 {client.processes.map((process, index) => (
                   <div key={index} className="flex flex-col space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{process.name}</span>
+                      <div className="flex items-center">
+                        <span className="text-sm font-medium">{process.name}</span>
+                        {process.deliveryStatus === "completed" && process.file && userRole !== "dashboard" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="ml-2 p-0 h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openDocumentViewer(process)
+                            }}
+                            title="Ver documento"
+                            disabled={isLoading}
+                          >
+                            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        )}
+                      </div>
                       <Badge
                         variant="outline"
                         className={`text-xs ${getStatusColor(process.status, process.deliveryStatus)}`}
@@ -164,7 +298,15 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
           </div>
         </div>
       </DialogContent>
+      <DocumentViewerModal
+        isOpen={isDocumentViewerOpen}
+        onClose={() => setIsDocumentViewerOpen(false)}
+        documentUrl={documentUrl}
+        documentType={documentType}
+        title={documentTitle}
+        fileName={fileName}
+        onDownload={handleDownload}
+      />
     </Dialog>
   )
 }
-
