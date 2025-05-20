@@ -225,7 +225,7 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">{client.client}</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">{client.company}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-6 py-4">
           <div>
