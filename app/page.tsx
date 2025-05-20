@@ -256,8 +256,10 @@ const InfiniteScrollDisplay = ({
   )
 
   // Auto-scroll to the next bulk after a certain time with fade effect
+  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
-    const timer = setInterval(() => {
+    const interval = setInterval(() => {
       // Start fade out
       setIsVisible(false)
 
@@ -269,8 +271,14 @@ const InfiniteScrollDisplay = ({
       }, 500) // This should match the CSS transition duration
     }, BULK_DISPLAY_TIME)
 
-    return () => clearInterval(timer)
-  }, [totalBulks])
+    setTimer(interval)
+
+    return () => {
+      if (timer) {
+        clearInterval(timer)
+      }
+    }
+  }, [totalBulks, timer])
 
   // Get the current bulk of clients to display
   const currentBulk = clientBulks[currentBulkIndex] || []
@@ -306,8 +314,8 @@ const InfiniteScrollDisplay = ({
             onClick={() => onClientClick(item)}
           >
             <CardContent className="p-4">
-              <div className="text-sm font-semibold truncate">{item.client}</div>
-              <div className="text-xs text-gray-500 truncate">{item.company}</div>
+              <div className="text-sm font-semibold truncate">{item.company}</div>
+              <div className="text-xs text-gray-500 truncate">{item.client}</div>
               <div className="flex items-center mt-1">
                 <div
                   className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
@@ -382,6 +390,7 @@ export default function DashboardPage() {
   const [isLoadingAllClients, setIsLoadingAllClients] = useState(false)
   const [initialLoad, setInitialLoad] = useState(true)
   const [isClient, setIsClient] = useState(false)
+  const [sortCompany, setSortCompany] = useState<"asc" | "desc">("asc")
 
   // Función para obtener los datos del dashboard
   const fetchDashboardData = useCallback(async () => {
@@ -497,89 +506,93 @@ export default function DashboardPage() {
   }, [])
 
   // Función para obtener los clientes con sus detalles
-  const fetchClients = useCallback(async (page = 1, limit = ITEMS_PER_PAGE, filters = {}) => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
-      }
-
-      // Construir los parámetros de la consulta
-      const params: Record<string, any> = {
-        page,
-        limit,
-      }
-
-      // Verificar el rol del usuario y aplicar filtros específicos
-      const userRole = localStorage.getItem("userRole")
-
-      if (userRole === "contacto") {
-        const contactoId = getLoggedContactoId()
-        if (contactoId) {
-          // Si ya hay contactoIds en los filtros, ignorarlos y usar solo el ID del usuario
-          params.contactoIds = [contactoId]
+  const fetchClients = useCallback(
+    async (page = 1, limit = ITEMS_PER_PAGE, filters = {}) => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No authentication token found")
         }
-      } else if (userRole === "contador") {
-        const contadorId = getLoggedContadorId()
-        if (contadorId) {
-          // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
-          params.contadorIds = [contadorId]
+
+        // Construir los parámetros de la consulta
+        const params: Record<string, any> = {
+          page,
+          limit,
+          sortCompany, // Añadir el parámetro de ordenamiento
         }
-      } else {
-        // Añadir filtros si existen
-        if (filters) {
-          Object.entries(filters).forEach(([key, value]) => {
-            if (
-              value &&
-              (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
-            ) {
-              params[key] = value
-            }
-          })
+
+        // Verificar el rol del usuario y aplicar filtros específicos
+        const userRole = localStorage.getItem("userRole")
+
+        if (userRole === "contacto") {
+          const contactoId = getLoggedContactoId()
+          if (contactoId) {
+            // Si ya hay contactoIds en los filtros, ignorarlos y usar solo el ID del usuario
+            params.contactoIds = [contactoId]
+          }
+        } else if (userRole === "contador") {
+          const contadorId = getLoggedContadorId()
+          if (contadorId) {
+            // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
+            params.contadorIds = [contadorId]
+          }
+        } else {
+          // Añadir filtros si existen
+          if (filters) {
+            Object.entries(filters).forEach(([key, value]) => {
+              if (
+                value &&
+                (typeof value === "string" ? value.trim() !== "" : Array.isArray(value) ? value.length > 0 : true)
+              ) {
+                params[key] = value
+              }
+            })
+          }
         }
+
+        const response = await axiosInstance.get<ApiResponse>("/dashboard/clients", {
+          params,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          paramsSerializer: (params) => {
+            const searchParams = new URLSearchParams()
+
+            Object.entries(params).forEach(([key, value]) => {
+              if (Array.isArray(value)) {
+                value.forEach((val) => searchParams.append(key, val))
+              } else {
+                searchParams.append(key, value)
+              }
+            })
+
+            return searchParams.toString()
+          },
+        })
+
+        if (response.data.success) {
+          const { data, pagination } = response.data.data
+
+          // Mapear los datos de la API al formato esperado por los componentes
+          const mappedData = data.map(mapApiClientToFiscalDeliverable)
+
+          setClientsData(mappedData)
+          setCurrentPage(pagination.page)
+          setTotalPages(pagination.totalPages)
+          setTotalItems(pagination.total)
+        } else {
+          throw new Error(response.data.message || "Error fetching clients")
+        }
+      } catch (error) {
+        console.error("Error fetching clients:", error)
+        toast.error("Error al cargar los clientes")
+      } finally {
+        setIsLoading(false)
       }
-
-      const response = await axiosInstance.get<ApiResponse>("/dashboard/clients", {
-        params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        paramsSerializer: (params) => {
-          const searchParams = new URLSearchParams()
-
-          Object.entries(params).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-              value.forEach((val) => searchParams.append(key, val))
-            } else {
-              searchParams.append(key, value)
-            }
-          })
-
-          return searchParams.toString()
-        },
-      })
-
-      if (response.data.success) {
-        const { data, pagination } = response.data.data
-
-        // Mapear los datos de la API al formato esperado por los componentes
-        const mappedData = data.map(mapApiClientToFiscalDeliverable)
-
-        setClientsData(mappedData)
-        setCurrentPage(pagination.page)
-        setTotalPages(pagination.totalPages)
-        setTotalItems(pagination.total)
-      } else {
-        throw new Error(response.data.message || "Error fetching clients")
-      }
-    } catch (error) {
-      console.error("Error fetching clients:", error)
-      toast.error("Error al cargar los clientes")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+    },
+    [sortCompany],
+  ) // Añadir sortCompany como dependencia
 
   // Function to fetch all clients for fullscreen mode
   const fetchAllClients = useCallback(async () => {
@@ -596,6 +609,7 @@ export default function DashboardPage() {
       const params: Record<string, any> = {
         page: 1,
         limit: 10000, // Set a very high limit to get all clients at once
+        sortCompany, // Añadir el parámetro de ordenamiento
       }
 
       // Verificar si el usuario es un contacto y añadir su ID como filtro
@@ -651,7 +665,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingAllClients(false)
     }
-  }, [filters, isLoadingAllClients])
+  }, [filters, isLoadingAllClients, sortCompany]) // Añadir sortCompany como dependencia
 
   // Cargar datos iniciales
   // Update the useEffect to call fetchContacts
@@ -865,6 +879,13 @@ export default function DashboardPage() {
     )
   }
 
+  // Función para alternar el orden de clasificación
+  const toggleSortOrder = () => {
+    const newOrder = sortCompany === "asc" ? "desc" : "asc"
+    setSortCompany(newOrder)
+    fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+  }
+
   // Buscar el useEffect que maneja el modo de pantalla completa (cerca de la línea 1000)
   // y reemplazarlo con este código mejorado:
 
@@ -1048,6 +1069,19 @@ export default function DashboardPage() {
                 </div>
               </SheetContent>
             </Sheet>
+            <Button onClick={toggleSortOrder} variant="outline" size="sm" className="h-8 px-3">
+              {sortCompany === "asc" ? (
+                <>
+                  <ArrowUpDown className="mr-2 h-4 w-4" />
+                  A-Z
+                </>
+              ) : (
+                <>
+                  <ArrowUpDown className="mr-2 h-4 w-4 rotate-180" />
+                  Z-A
+                </>
+              )}
+            </Button>
             <Button onClick={toggleFullscreen} variant="outline" size="sm" className="h-8 w-8">
               {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
               <span className="sr-only">{isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}</span>
@@ -1237,8 +1271,8 @@ export default function DashboardPage() {
                       onClick={() => handleCardClick(item)}
                     >
                       <CardContent className="p-4">
-                        <div className="text-sm font-semibold truncate">{item.client}</div>
-                        <div className="text-xs text-gray-500 truncate">{item.company}</div>
+                        <div className="text-sm font-semibold truncate">{item.company}</div>
+                        <div className="text-xs text-gray-500 truncate">{item.client}</div>
                         <div className="flex items-center mt-1">
                           <div
                             className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
