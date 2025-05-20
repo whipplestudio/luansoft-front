@@ -25,6 +25,8 @@ import {
   Contact,
 } from "lucide-react"
 import { hasPermission, type ResourceType, type RoleType } from "@/lib/permissions"
+// Importamos la versión desde package.json
+import packageInfo from "../package.json"
 
 // Estructura completa de los elementos del sidebar con información de permisos
 const sidebarItems = [
@@ -65,7 +67,7 @@ const sidebarItems = [
     resource: "asignacion-contadores" as ResourceType,
   },
   {
-    title: "Asignación de Contactos",
+    title: "Asignacin de Contactos",
     url: "/asignacion-contactos",
     icon: UserPlus,
     resource: "asignacion-contactos" as ResourceType,
@@ -124,6 +126,10 @@ export function AppSidebar({ userRole }: { userRole: string | null }) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Versión de la aplicación obtenida desde package.json */}
+      <div className="absolute bottom-4 left-4 text-xs text-white">Versión {packageInfo.version}</div>
+
       <SidebarRail />
     </Sidebar>
   )

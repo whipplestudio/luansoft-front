@@ -1,53 +1,36 @@
-name: 📚 Deploy MkDocs to Vercel
+# .github/workflows/version-bump.yml
+name: 🔖 Auto Version Bump
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'documentacion-luenser/**'
-      - '.github/workflows/deploy-docs.yml'
 
 jobs:
-  deploy-to-vercel:
+  bump-version:
+    name: Bump package.json version
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Checkout full repository (necesario para tags)
+        uses: actions/checkout@v4
         with:
-          python-version: '3.x'
+          fetch-depth: 0
 
-      - name: Install MkDocs & plugins
-        run: |
-          pip install mkdocs mkdocs-material mkdocs-minify-plugin
-
-      - name: Build MkDocs site
-        working-directory: documentacion-luenser
-        run: mkdocs build --clean -d public
-
-      - name: List public folder
-        run: ls -R documentacion-luenser/public
-
-      - name: Set up Node.js
+      - name: Setup Node.js 18
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: '18'
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel
-
-      - name: Deploy to Vercel
-        working-directory: documentacion-luenser/public
+      - name: Bump version (patch)
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          rm -rf .vercel
-          vercel deploy \
-            --prod \
-            --confirm \
-            --force \
-            --token $VERCEL_TOKEN \
-            --name luensoft-doc
+          # Configura el usuario de Git para el commit
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          # Incrementa la versión patch en package.json,
+          # crea commit y tag: vX.Y.Z
+          npm version patch -m "chore(release): v%s"
+          # Empuja el commit y el tag al repositorio remoto
+          git push --follow-tags
