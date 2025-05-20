@@ -287,9 +287,16 @@ export function ClientDetailDialog({ isOpen, onClose, client }: ClientDetailDial
                                     : "Pendiente"}
                       </Badge>
                     </div>
-                    <div className="flex items-center text-xs text-gray-500">
-                      <CalendarIcon className="h-3 w-3 mr-1" />
-                      <span>Vence: {process.dueDate ? formatDate(process.dueDate) : "No definida"}</span>
+                    <div className="flex flex-col space-y-1 text-xs text-gray-500">
+                      <div className="flex items-center">
+                        <CalendarIcon className="h-3 w-3 mr-1" />
+                        <span>Vence: {process.dueDate ? formatDate(process.dueDate) : "No definida"}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="ml-4">
+                          Días de gracia: {process.graceDays !== undefined ? process.graceDays : 0}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -31,6 +31,7 @@ export interface Process {
   description?: string
   status: string
   progress: number
+  graceDays: number
   createdAt?: string
   updatedAt?: string
   dueDate?: string // Añadir campo para fecha de vencimiento
@@ -141,6 +142,7 @@ export interface ApiClient {
     commitmentDate: string
     status: string
     deliveryStatus: "onTime" | "atRisk" | "delayed" | "completed"
+    graceDays: number
     file?: {
       id: string
       originalName: string

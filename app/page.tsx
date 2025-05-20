@@ -57,6 +57,7 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
   const mappedProcesses: Process[] = client.processes.map((p) => ({
     id: p.id,
     name: p.name,
+    graceDays: p.graceDays,
     status: p.status === "PAID" ? "completed" : p.deliveryStatus === "onTime" ? "in_progress" : "pending",
     progress: p.status === "PAID" ? 100 : p.deliveryStatus === "onTime" ? 50 : 0,
     dueDate: p.commitmentDate,
@@ -570,7 +571,7 @@ export default function DashboardPage() {
             return searchParams.toString()
           },
         })
-
+        
         if (response.data.success) {
           const { data, pagination } = response.data.data
 
