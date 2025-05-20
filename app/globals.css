@@ -192,14 +192,11 @@
   .container {
     max-width: 2560px;
   }
-  \
-  .2
-  xl\:max-w-\[300px\] {
+  .xl\:max-w-\[300px\] {
     max-width: 300px;
   }
 
-  .2
-  xl\:mx-auto {
+  .xl\:mx-auto {
     margin-left: auto;
     margin-right: auto;
   }
@@ -207,13 +204,13 @@
 
 /* Nuevos breakpoints para pantallas extra grandes */
 @media (min-width: 3072px) {
-  .3
-  xl\:grid-cols-10 {
+  .xl\:grid-cols-10 {
     grid-template-columns: repeat(10, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 3840px) {
+  \
   .4
   xl\:grid-cols-12 {
     grid-template-columns: repeat(12, minmax(0, 1fr));
