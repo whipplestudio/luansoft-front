@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, MoreHorizontal } from "lucide-react"
+import { PlusCircle, MoreHorizontal, ArrowUp, ArrowDown } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Contador } from "@/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -30,6 +30,7 @@ export default function ContadoresPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
   useEffect(() => {
     const role = localStorage.getItem("userRole")
@@ -63,7 +64,7 @@ export default function ContadoresPage() {
   })
   const [filter, setFilter] = useState("")
 
-  const fetchContadores = useCallback(async (page = 1, limit = 10, searchFilter = "") => {
+  const fetchContadores = useCallback(async (page = 1, limit = 10, searchFilter = "", order = "asc") => {
     setIsLoading(true)
     try {
       const token = localStorage.getItem("accessToken")
@@ -76,6 +77,7 @@ export default function ContadoresPage() {
           page,
           limit,
           filter: searchFilter || undefined,
+          order,
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -117,9 +119,9 @@ export default function ContadoresPage() {
 
   const debouncedSearch = useCallback(
     debounce((value: string) => {
-      fetchContadores(pagination.page, pagination.limit, value)
+      fetchContadores(pagination.page, pagination.limit, value, sortOrder)
     }, 3000),
-    [fetchContadores],
+    [fetchContadores, pagination.page, pagination.limit, sortOrder],
   )
 
   const handleFilterChange = (value: string) => {
@@ -127,14 +129,20 @@ export default function ContadoresPage() {
     debouncedSearch(value)
   }
 
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchContadores(pagination.page, pagination.limit, filter, newOrder)
+  }
+
   const handlePageChange = (page: number) => {
     setPagination((prev) => ({ ...prev, page }))
-    fetchContadores(page, pagination.limit, filter)
+    fetchContadores(page, pagination.limit, filter, sortOrder)
   }
 
   const handleLimitChange = (limit: number) => {
     setPagination((prev) => ({ ...prev, limit, page: 1 }))
-    fetchContadores(1, limit, filter)
+    fetchContadores(1, limit, filter, sortOrder)
   }
 
   useEffect(() => {
@@ -143,7 +151,7 @@ export default function ContadoresPage() {
 
   const handleNewContadorSuccess = () => {
     setIsDialogOpen(false)
-    fetchContadores(pagination.page, pagination.limit, filter)
+    fetchContadores(pagination.page, pagination.limit, filter, sortOrder)
   }
 
   const handleEdit = (contador: Contador) => {
@@ -179,7 +187,7 @@ export default function ContadoresPage() {
         if (response.data.success) {
           toast.success("Contador eliminado exitosamente")
           setIsConfirmDialogOpen(false)
-          fetchContadores(pagination.page, pagination.limit, filter)
+          fetchContadores(pagination.page, pagination.limit, filter, sortOrder)
         } else {
           throw new Error(response.data.message || "Error al eliminar el contador")
         }
@@ -290,17 +298,32 @@ export default function ContadoresPage() {
         <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Catálogo de Contadores</h1>
-          {hasPermission(userRole as RoleType, "contadores", "create") && (
-            <Button
-              onClick={() => {
-                setSelectedContador(null)
-                setDialogMode("create")
-                setIsDialogOpen(true)
-              }}
-            >
-              <PlusCircle className="mr-2 h-4 w-4" /> Agregar Contador
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleSortOrder} className="flex items-center gap-2">
+              {sortOrder === "asc" ? (
+                <>
+                  <ArrowUp className="h-4 w-4" />
+                  A-Z
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-4 w-4" />
+                  Z-A
+                </>
+              )}
             </Button>
-          )}
+            {hasPermission(userRole as RoleType, "contadores", "create") && (
+              <Button
+                onClick={() => {
+                  setSelectedContador(null)
+                  setDialogMode("create")
+                  setIsDialogOpen(true)
+                }}
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Contador
+              </Button>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
