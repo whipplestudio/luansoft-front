@@ -240,21 +240,10 @@ export default function ClientesPage() {
           setContactos(response.data.data.data)
           setTotalPages(response.data.data.totalPages)
           setTotalItems(response.data.data.total)
-        } else {
-          console.error("Error en la respuesta de la API:", response.data.message)
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los clientes",
-            variant: "destructive",
-          })
         }
       } catch (error) {
         console.error("Error al obtener clientes:", error)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los clientes",
-          variant: "destructive",
-        })
+        toast.error("No se pudieron cargar los clientes")
       } finally {
         setIsLoading(false)
       }

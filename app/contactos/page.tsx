@@ -7,7 +7,7 @@ import { columns } from "./columns"
 import type { Contacto } from "@/types"
 import { axiosInstance } from "@/lib/axios"
 import { useToast } from "@/components/ui/use-toast"
-import { UserPlus } from "lucide-react"
+import { ArrowDown, ArrowUp, UserPlus } from "lucide-react"
 import { ContactoForm } from "@/components/ContactoForm"
 import { ContactoDetails } from "@/components/ContactoDetails"
 import { ConfirmationDialog } from "@/components/ConfirmationDialog"
@@ -35,6 +35,7 @@ export default function ContactosPage() {
   const [pageSize, setPageSize] = useState(10)
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
   // Estados para modales
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -44,45 +45,56 @@ export default function ContactosPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [activeClients, setActiveClients] = useState<{ id: string; company: string }[]>([])
 
+  // Función para alternar el orden
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchContactos(undefined, newOrder)
+  }
+
   // Función para obtener los contactos desde la API
-  const fetchContactos = async (search?: string) => {
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams()
-      params.append("page", currentPage.toString())
-      params.append("limit", pageSize.toString())
+  const fetchContactos = useCallback(
+    async (search?: string, order?: "asc" | "desc") => {
+      setIsLoading(true)
+      try {
+        const params = new URLSearchParams()
+        params.append("page", currentPage.toString())
+        params.append("limit", pageSize.toString())
+        params.append("order", order || sortOrder)
 
-      // Añadir filtro si existe
-      const filterTerm = search !== undefined ? search : searchTerm
-      if (filterTerm.trim()) {
-        params.append("filter", filterTerm)
-      }
+        // Añadir filtro si existe
+        const filterTerm = search !== undefined ? search : searchTerm
+        if (filterTerm.trim()) {
+          params.append("filter", filterTerm)
+        }
 
-      const response = await axiosInstance.get<ContactosResponse>(`/contacto?${params.toString()}`)
+        const response = await axiosInstance.get<ContactosResponse>(`/contacto?${params.toString()}`)
 
-      if (response.data.success) {
-        setContactos(response.data.data.data)
-        setTotalPages(response.data.data.totalPages)
-        setTotalItems(response.data.data.total)
-      } else {
-        console.error("Error en la respuesta de la API:", response.data.message)
+        if (response.data.success) {
+          setContactos(response.data.data.data)
+          setTotalPages(response.data.data.totalPages)
+          setTotalItems(response.data.data.total)
+        } else {
+          console.error("Error en la respuesta de la API:", response.data.message)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar los contactos",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error al obtener contactos:", error)
         toast({
           title: "Error",
           description: "No se pudieron cargar los contactos",
           variant: "destructive",
         })
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error al obtener contactos:", error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los contactos",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    },
+    [currentPage, pageSize, searchTerm, sortOrder, toast],
+  )
 
   // Función para obtener clientes activos
   const fetchActiveClients = async () => {
@@ -115,7 +127,7 @@ export default function ContactosPage() {
       setCurrentPage(1) // Resetear a la primera página cuando se busca
       fetchContactos(value) // Pasar el valor directamente a fetchContactos
     }, 3000), // 3 segundos de debounce
-    [currentPage, pageSize], // Dependencias para recrear la función cuando cambian estos valores
+    [currentPage, pageSize, sortOrder], // Dependencias para recrear la función cuando cambian estos valores
   )
 
   // Función para manejar cambios en la búsqueda
@@ -238,10 +250,25 @@ export default function ContactosPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Gestión de Contactos</h1>
-        <Button onClick={handleAddContacto} className="bg-primary-green hover:bg-primary-green/90">
-          <UserPlus className="mr-2 h-4 w-4" />
-          Nuevo Contacto
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={toggleSortOrder} variant="outline" className="flex items-center gap-1">
+            {sortOrder === "asc" ? (
+              <>
+                <ArrowUp className="h-4 w-4" />
+                <span>A-Z</span>
+              </>
+            ) : (
+              <>
+                <ArrowDown className="h-4 w-4" />
+                <span>Z-A</span>
+              </>
+            )}
+          </Button>
+          <Button onClick={handleAddContacto} className="bg-primary-green hover:bg-primary-green/90">
+            <UserPlus className="mr-2 h-4 w-4" />
+            Nuevo Contacto
+          </Button>
+        </div>
       </div>
 
       <DataTable
