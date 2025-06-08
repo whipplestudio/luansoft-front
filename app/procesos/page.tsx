@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, MoreHorizontal } from "lucide-react"
+import { PlusCircle, MoreHorizontal, ArrowUp, ArrowDown } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Process } from "@/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -45,54 +45,59 @@ export default function ProcesosPage() {
     totalPages: 0,
   })
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
   // Modificar la función fetchProcesses para incluir el estado del proceso en los datos mapeados
-  const fetchProcesses = useCallback(async (page = 1, limit = 10, name = "") => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
-      }
+  const fetchProcesses = useCallback(
+    async (page = 1, limit = 10, name = "", order?: "asc" | "desc") => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No authentication token found")
+        }
 
-      const response = await axiosInstance.get("/process", {
-        params: {
-          page,
-          limit,
-          name: name || undefined,
-        },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.data.success) {
-        const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
-
-        // Mapear los datos para incluir progress y status si no existen
-        const mappedProcesses = data.map((process: any) => ({
-          ...process,
-          progress: process.progress || 0,
-          status: process.status || "ACTIVE", // Asegurar que status siempre tenga un valor
-        }))
-
-        setProcesses(mappedProcesses)
-        setPagination({
-          page: currentPage,
-          limit: pageLimit,
-          total,
-          totalPages,
+        const response = await axiosInstance.get("/process", {
+          params: {
+            page,
+            limit,
+            name: name || undefined,
+            order: order || sortOrder,
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         })
-      } else {
-        throw new Error(response.data.message || "Error fetching processes")
+
+        if (response.data.success) {
+          const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
+
+          // Mapear los datos para incluir progress y status si no existen
+          const mappedProcesses = data.map((process: any) => ({
+            ...process,
+            progress: process.progress || 0,
+            status: process.status || "ACTIVE", // Asegurar que status siempre tenga un valor
+          }))
+
+          setProcesses(mappedProcesses)
+          setPagination({
+            page: currentPage,
+            limit: pageLimit,
+            total,
+            totalPages,
+          })
+        } else {
+          throw new Error(response.data.message || "Error fetching processes")
+        }
+      } catch (error) {
+        console.error("Error fetching processes:", error)
+        toast.error("Error al cargar los procesos")
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching processes:", error)
-      toast.error("Error al cargar los procesos")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+    },
+    [sortOrder],
+  )
 
   // Debounced search function
   const debouncedSearch = useCallback(
@@ -120,6 +125,12 @@ export default function ProcesosPage() {
   const handleLimitChange = (limit: number) => {
     setPagination((prev) => ({ ...prev, limit, page: 1 }))
     fetchProcesses(1, limit, searchTerm)
+  }
+
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchProcesses(pagination.page, pagination.limit, searchTerm, newOrder)
   }
 
   useEffect(() => {
@@ -347,18 +358,33 @@ export default function ProcesosPage() {
         <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Catálogo de Procesos</h1>
-          {/* Mostrar el botón de agregar proceso solo si el usuario tiene permisos */}
-          {localStorage.getItem("userRole") !== "contador" && (
-            <Button
-              onClick={() => {
-                setSelectedProcess(null)
-                setDialogMode("create")
-                setIsDialogOpen(true)
-              }}
-            >
-              <PlusCircle className="mr-2 h-4 w-4" /> Agregar Proceso
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleSortOrder} className="flex items-center gap-1">
+              {sortOrder === "asc" ? (
+                <>
+                  <ArrowUp className="h-4 w-4" />
+                  A-Z
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-4 w-4" />
+                  Z-A
+                </>
+              )}
             </Button>
-          )}
+            {/* Mostrar el botón de agregar proceso solo si el usuario tiene permisos */}
+            {localStorage.getItem("userRole") !== "contador" && (
+              <Button
+                onClick={() => {
+                  setSelectedProcess(null)
+                  setDialogMode("create")
+                  setIsDialogOpen(true)
+                }}
+              >
+                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Proceso
+              </Button>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
