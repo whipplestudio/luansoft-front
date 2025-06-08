@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, PlusCircle } from "lucide-react"
+import { MoreHorizontal, PlusCircle, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import { DialogCreateClient } from "@/components/DialogCreateClient"
@@ -81,6 +81,7 @@ interface ApiResponse {
 export default function ClientesPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
   useEffect(() => {
     const role = localStorage.getItem("userRole")
@@ -198,14 +199,22 @@ export default function ClientesPage() {
     }
   }
 
+  // Función para alternar el orden de clasificación
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchClients(undefined, undefined, undefined, newOrder)
+  }
+
   // Buscar la función fetchClientes y modificarla para incluir el contadorId cuando el usuario es un contador
   const fetchClients = useCallback(
-    async (search?: string) => {
+    async (search?: string, page?: number, limit?: number, order?: "asc" | "desc") => {
       setIsLoading(true)
       try {
         const params = new URLSearchParams()
-        params.append("page", currentPage.toString())
-        params.append("limit", pageSize.toString())
+        params.append("page", (page || currentPage).toString())
+        params.append("limit", (limit || pageSize).toString())
+        params.append("order", order || sortOrder)
 
         // Añadir filtro si existe
         const filterTerm = search !== undefined ? search : searchTerm
@@ -250,7 +259,7 @@ export default function ClientesPage() {
         setIsLoading(false)
       }
     },
-    [currentPage, pageSize, searchTerm],
+    [currentPage, pageSize, searchTerm, sortOrder],
   )
 
   // Debounce para la búsqueda
@@ -325,12 +334,27 @@ export default function ClientesPage() {
         <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Clientes</h1>
-          {hasPermission(userRole as RoleType, "clientes", "create") && (
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Agregar Cliente
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={toggleSortOrder} className="flex items-center gap-1">
+              {sortOrder === "asc" ? (
+                <>
+                  <ArrowUp className="h-4 w-4" />
+                  <span>A-Z</span>
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-4 w-4" />
+                  <span>Z-A</span>
+                </>
+              )}
             </Button>
-          )}
+            {hasPermission(userRole as RoleType, "clientes", "create") && (
+              <Button onClick={() => setIsCreateDialogOpen(true)}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Agregar Cliente
+              </Button>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
