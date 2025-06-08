@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, MoreHorizontal } from "lucide-react"
+import { PlusCircle, MoreHorizontal, ArrowDown, ArrowUp } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { User } from "@/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -21,7 +21,10 @@ import {
 import { debounce } from "@/utils/debounce"
 import axiosInstance from "@/api/config"
 import { toast } from "sonner"
+// Importamos el componente de ruta protegida en la parte superior del archivo:
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
+// Envolvemos todo el contenido de la función UsuariosPage con el componente ProtectedRoute:
 export default function UsuariosPage() {
   const [users, setUsers] = useState<User[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -38,55 +41,67 @@ export default function UsuariosPage() {
   })
   const [filter, setFilter] = useState("")
   const [isDeletingUser, setIsDeletingUser] = useState(false)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
-  const fetchUsers = useCallback(async (page = 1, limit = 10, searchFilter = "") => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
-      }
+  const fetchUsers = useCallback(
+    async (page = 1, limit = 10, searchFilter = "", order = sortOrder) => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No authentication token found")
+        }
 
-      const response = await axiosInstance.get(`/user`, {
-        params: {
-          page,
-          limit,
-          filter: searchFilter || undefined,
-        },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.data.success) {
-        const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
-
-        // Map API response to our User type
-        const mappedUsers = data.map((user: any) => ({
-          id: user.id,
-          name: `${user.firstName} ${user.lastName}`,
-          email: user.email,
-          role: user.role.toLowerCase(),
-          status: user.status.toLowerCase() === "active" ? "active" : "inactive",
-          lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "Nunca",
-        }))
-
-        setUsers(mappedUsers)
-        setPagination({
-          page: currentPage,
-          limit: pageLimit,
-          total,
-          totalPages,
+        const response = await axiosInstance.get(`/user`, {
+          params: {
+            page,
+            limit,
+            filter: searchFilter || undefined,
+            order,
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         })
-      } else {
-        throw new Error(response.data.message || "Error fetching users")
+
+        if (response.data.success) {
+          const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
+
+          // Map API response to our User type
+          const mappedUsers = data.map((user: any) => ({
+            id: user.id,
+            name: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            role: user.role.toLowerCase(),
+            status: user.status.toLowerCase() === "active" ? "active" : "inactive",
+            lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "Nunca",
+          }))
+
+          setUsers(mappedUsers)
+          setPagination({
+            page: currentPage,
+            limit: pageLimit,
+            total,
+            totalPages,
+          })
+        } else {
+          throw new Error(response.data.message || "Error fetching users")
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error)
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching users:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+    },
+    [sortOrder],
+  )
+
+  // Función para cambiar el orden de clasificación
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchUsers(pagination.page, pagination.limit, filter, newOrder)
+  }
 
   // Debounced search function
   const debouncedSearch = useCallback(
@@ -251,64 +266,80 @@ export default function UsuariosPage() {
   ]
 
   return (
-    <div className="container mx-auto py-10">
-      <Toaster />
-      <div className="flex justify-between items-center mb-5">
-        <h1 className="text-2xl font-bold">Usuarios</h1>
-        <Button
-          onClick={() => {
-            setSelectedUser(null)
-            setDialogMode("create")
-            setIsDialogOpen(true)
+    <ProtectedRoute resource="usuarios" action="view" redirectTo="/">
+      <div className="container mx-auto py-10">
+        <Toaster />
+        <div className="flex justify-between items-center mb-5">
+          <h1 className="text-2xl font-bold">Usuarios</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={toggleSortOrder} className="flex items-center gap-1">
+              {sortOrder === "asc" ? (
+                <>
+                  <ArrowUp className="h-4 w-4" />
+                  <span>A-Z</span>
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-4 w-4" />
+                  <span>Z-A</span>
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={() => {
+                setSelectedUser(null)
+                setDialogMode("create")
+                setIsDialogOpen(true)
+              }}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Agregar Usuario
+            </Button>
+          </div>
+        </div>
+        <DataTable
+          columns={columns}
+          data={users}
+          isLoading={isLoading}
+          pagination={{
+            pageCount: pagination.totalPages,
+            page: pagination.page,
+            onPageChange: handlePageChange,
+            perPage: pagination.limit,
+            onPerPageChange: handleLimitChange,
           }}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Agregar Usuario
-        </Button>
+          searchValue={filter}
+          onSearchChange={handleFilterChange}
+        />
+
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{dialogMode === "create" ? "Agregar Nuevo Usuario" : "Editar Usuario"}</DialogTitle>
+            </DialogHeader>
+            <NewUserForm onSuccess={handleNewUserSuccess} user={selectedUser || undefined} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Detalles del Usuario</DialogTitle>
+            </DialogHeader>
+            {selectedUser && <UserDetails user={selectedUser} />}
+          </DialogContent>
+        </Dialog>
+
+        <ConfirmationDialog
+          isOpen={isConfirmDialogOpen}
+          onClose={handleCloseConfirmDialog}
+          onConfirm={confirmDelete}
+          title="Eliminar Usuario"
+          description="¿Estás seguro de que quieres eliminar este usuario? Esta acción no se puede deshacer."
+          confirmationWord="ELIMINAR"
+          isConfirming={isDeletingUser}
+        />
       </div>
-      <DataTable
-        columns={columns}
-        data={users}
-        isLoading={isLoading}
-        pagination={{
-          pageCount: pagination.totalPages,
-          page: pagination.page,
-          onPageChange: handlePageChange,
-          perPage: pagination.limit,
-          onPerPageChange: handleLimitChange,
-        }}
-        searchValue={filter}
-        onSearchChange={handleFilterChange}
-      />
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{dialogMode === "create" ? "Agregar Nuevo Usuario" : "Editar Usuario"}</DialogTitle>
-          </DialogHeader>
-          <NewUserForm onSuccess={handleNewUserSuccess} user={selectedUser || undefined} />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Detalles del Usuario</DialogTitle>
-          </DialogHeader>
-          {selectedUser && <UserDetails user={selectedUser} />}
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmationDialog
-        isOpen={isConfirmDialogOpen}
-        onClose={handleCloseConfirmDialog}
-        onConfirm={confirmDelete}
-        title="Eliminar Usuario"
-        description="¿Estás seguro de que quieres eliminar este usuario? Esta acción no se puede deshacer."
-        confirmationWord="ELIMINAR"
-        isConfirming={isDeletingUser}
-      />
-    </div>
+    </ProtectedRoute>
   )
 }
-
