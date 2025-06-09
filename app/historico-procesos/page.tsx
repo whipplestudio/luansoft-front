@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
-import { Filter, Eye, Download } from "lucide-react"
+import { Filter, Eye, Download, ArrowUpDown, User, Calendar } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { HistoricoFiltros } from "@/components/HistoricoFiltros"
 import { Toaster, toast } from "sonner"
@@ -236,6 +236,10 @@ export default function HistoricoProcesosPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
   const [userRole, setUserRole] = useState<string | null>(null)
 
+  // Estados para el ordenamiento
+  const [sortBy, setSortBy] = useState<"clientName" | "originalDate">("clientName")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+
   useEffect(() => {
     const role = localStorage.getItem("userRole")
     setUserRole(role)
@@ -265,6 +269,18 @@ export default function HistoricoProcesosPage() {
     fileName: string
     fileId: string
   } | null>(null)
+
+  // Función para alternar el ordenamiento
+  const toggleSort = (field: "clientName" | "originalDate") => {
+    if (sortBy === field) {
+      // Si ya estamos ordenando por este campo, cambiamos el orden
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+    } else {
+      // Si cambiamos de campo, establecemos el nuevo campo y orden ascendente
+      setSortBy(field)
+      setSortOrder("asc")
+    }
+  }
 
   // Función para obtener clientes activos
   const fetchActiveClients = async () => {
@@ -477,105 +493,112 @@ export default function HistoricoProcesosPage() {
     toast.warn("No se pudo conectar con la API. Usando datos locales para demostración.")
   }
 
-  // Actualizar la función fetchProcessHistory para usar los nombres correctos de parámetros de fecha
-  const fetchProcessHistory = useCallback(async (page = 1, limit = 10, filters = {}) => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
-      }
+  // Actualizar la función fetchProcessHistory para incluir los parámetros de ordenamiento
+  const fetchProcessHistory = useCallback(
+    async (page = 1, limit = 10, filters = {}) => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No authentication token found")
+        }
 
-      // Construir URLSearchParams para construir la URL con el formato correcto
-      const searchParams = new URLSearchParams()
-      searchParams.append("page", page.toString())
-      searchParams.append("limit", limit.toString())
+        // Construir URLSearchParams para construir la URL con el formato correcto
+        const searchParams = new URLSearchParams()
+        searchParams.append("page", page.toString())
+        searchParams.append("limit", limit.toString())
 
-      // Añadir filtros si existen usando el formato correcto clientId[], contadorId[], processId[]
-      if (filters.clientIds && filters.clientIds.length > 0) {
-        filters.clientIds.forEach((id) => {
-          searchParams.append("clientId[]", id)
-        })
-      }
+        // Añadir parámetros de ordenamiento
+        searchParams.append("sortBy", sortBy)
+        searchParams.append("sortOrder", sortOrder)
 
-      // Verificar si el usuario es un contador y añadir su ID como filtro
-      const userRole = localStorage.getItem("userRole")
-      if (userRole === "contador") {
-        const userData = localStorage.getItem("user")
-        if (userData) {
-          const user = JSON.parse(userData)
-          if (user.contadorId) {
-            // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
-            searchParams.append("contadorId[]", user.contadorId)
+        // Añadir filtros si existen usando el formato correcto clientId[], contadorId[], processId[]
+        if (filters.clientIds && filters.clientIds.length > 0) {
+          filters.clientIds.forEach((id) => {
+            searchParams.append("clientId[]", id)
+          })
+        }
+
+        // Verificar si el usuario es un contador y añadir su ID como filtro
+        const userRole = localStorage.getItem("userRole")
+        if (userRole === "contador") {
+          const userData = localStorage.getItem("user")
+          if (userData) {
+            const user = JSON.parse(userData)
+            if (user.contadorId) {
+              // Si ya hay contadorIds en los filtros, ignorarlos y usar solo el ID del usuario
+              searchParams.append("contadorId[]", user.contadorId)
+            }
+          }
+        } else if (filters.contadorIds && filters.contadorIds.length > 0) {
+          // Si no es contador, usar los contadorIds de los filtros
+          filters.contadorIds.forEach((id) => {
+            searchParams.append("contadorId[]", id)
+          })
+        }
+
+        // Verificar si el usuario es un contacto y añadir su ID como filtro
+        if (userRole === "contacto") {
+          const contactoId = getLoggedContactoId()
+          if (contactoId) {
+            searchParams.append("contactoId", contactoId)
           }
         }
-      } else if (filters.contadorIds && filters.contadorIds.length > 0) {
-        // Si no es contador, usar los contadorIds de los filtros
-        filters.contadorIds.forEach((id) => {
-          searchParams.append("contadorId[]", id)
-        })
-      }
 
-      // Verificar si el usuario es un contacto y añadir su ID como filtro
-      if (userRole === "contacto") {
-        const contactoId = getLoggedContactoId()
-        if (contactoId) {
-          searchParams.append("contactoId", contactoId)
+        if (filters.processIds && filters.processIds.length > 0) {
+          filters.processIds.forEach((id) => {
+            searchParams.append("processId[]", id)
+          })
         }
-      }
 
-      if (filters.processIds && filters.processIds.length > 0) {
-        filters.processIds.forEach((id) => {
-          searchParams.append("processId[]", id)
-        })
-      }
+        // Añadir fechas si existen con los nombres correctos y formato YYYY-MM-DD
+        if (filters.originalDateFrom) searchParams.append("originalDateFrom", filters.originalDateFrom)
+        if (filters.originalDateTo) searchParams.append("originalDateTo", filters.originalDateTo)
 
-      // Añadir fechas si existen con los nombres correctos y formato YYYY-MM-DD
-      if (filters.originalDateFrom) searchParams.append("originalDateFrom", filters.originalDateFrom)
-      if (filters.originalDateTo) searchParams.append("originalDateTo", filters.originalDateTo)
+        // Construir la URL con los parámetros
+        const url = `/processhistory?${searchParams.toString()}`
 
-      // Construir la URL con los parámetros
-      const url = `/processhistory?${searchParams.toString()}`
+        // Realizar la petición con axiosInstance
+        const response = await axiosInstance.get<ProcessHistoryResponse>(url)
 
-      // Realizar la petición con axiosInstance
-      const response = await axiosInstance.get<ProcessHistoryResponse>(url)
+        if (response.data.success) {
+          // Mapear los datos al formato esperado por el componente DataTable
+          const mappedData = response.data.data.data.map((item) => ({
+            id: item.id,
+            processName: item.process.name,
+            clientName: item.client.company,
+            contadorName: `${item.contador.firstName} ${item.contador.lastName}`,
+            completedDate: format(new Date(item.dateCompleted), "dd/MM/yyyy"),
+            originalDueDate: format(new Date(item.originalDate), "dd/MM/yyyy"),
+            fileId: item.file.id,
+            fileName: item.file.originalName,
+            fileType: item.file.type,
+          }))
 
-      if (response.data.success) {
-        // Mapear los datos al formato esperado por el componente DataTable
-        const mappedData = response.data.data.data.map((item) => ({
-          id: item.id,
-          processName: item.process.name,
-          clientName: item.client.company,
-          contadorName: `${item.contador.firstName} ${item.contador.lastName}`,
-          completedDate: format(new Date(item.dateCompleted), "dd/MM/yyyy"),
-          originalDueDate: format(new Date(item.originalDate), "dd/MM/yyyy"),
-          fileId: item.file.id,
-          fileName: item.file.originalName,
-          fileType: item.file.type,
-        }))
+          setData(mappedData)
+          setTotalItems(response.data.data.total)
+          setTotalPages(response.data.data.totalPages)
 
-        setData(mappedData)
-        setTotalItems(response.data.data.total)
-        setTotalPages(response.data.data.totalPages)
-
-        // Si estábamos usando datos locales, mostrar mensaje de éxito
-        if (useLocalData) {
-          setUseLocalData(false)
-          toast.success("Conexión con la API restablecida")
+          // Si estábamos usando datos locales, mostrar mensaje de éxito
+          if (useLocalData) {
+            setUseLocalData(false)
+            toast.success("Conexión con la API restablecida")
+          }
+        } else {
+          console.error("Error en la respuesta de la API:", response.data.message)
+          handleApiError()
         }
-      } else {
-        console.error("Error en la respuesta de la API:", response.data.message)
+      } catch (error) {
+        console.error("Error al obtener el historial de procesos:", error)
         handleApiError()
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error al obtener el historial de procesos:", error)
-      handleApiError()
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+    },
+    [sortBy, sortOrder],
+  )
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales y cuando cambian los parámetros de ordenamiento
   useEffect(() => {
     // Si el usuario es contador y tenemos su ID, incluirlo en los filtros iniciales
     if (userRole === "contador" && preselectedContadorId) {
@@ -586,7 +609,7 @@ export default function HistoricoProcesosPage() {
     } else {
       fetchProcessHistory(page, limit, filters)
     }
-  }, [page, limit, preselectedContadorId, userRole, fetchProcessHistory])
+  }, [page, limit, preselectedContadorId, userRole, fetchProcessHistory, sortBy, sortOrder])
 
   // Actualizar la función handleApplyFilters para usar los nombres correctos de parámetros de fecha
   const handleApplyFilters = (newFilters: any) => {
@@ -653,31 +676,59 @@ export default function HistoricoProcesosPage() {
 
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Histórico de Procesos</h1>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline">
-                <Filter className="mr-2 h-4 w-4" />
-                Filtros avanzados
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={sortBy === "clientName" ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleSort("clientName")}
+                className="flex items-center gap-1"
+              >
+                <User className="h-4 w-4" />
+                Cliente
+                {sortBy === "clientName" && (
+                  <ArrowUpDown className={`h-4 w-4 ${sortOrder === "asc" ? "rotate-0" : "rotate-180"}`} />
+                )}
               </Button>
-            </SheetTrigger>
-            <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-              <SheetHeader>
-                <SheetTitle>Filtros avanzados</SheetTitle>
-                <SheetDescription>Filtra el histórico de procesos por diferentes criterios</SheetDescription>
-              </SheetHeader>
-              <HistoricoFiltros
-                onFilter={handleApplyFilters}
-                procesos={processes}
-                clientes={activeClients}
-                contadores={contadores}
-                isLoadingClients={isLoadingClients}
-                isLoadingProcesses={isLoadingProcesses}
-                isLoadingContadores={isLoadingContadores}
-                preselectedContadorId={preselectedContadorId}
-                userRole={userRole}
-              />
-            </SheetContent>
-          </Sheet>
+              <Button
+                variant={sortBy === "originalDate" ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleSort("originalDate")}
+                className="flex items-center gap-1"
+              >
+                <Calendar className="h-4 w-4" />
+                Fecha
+                {sortBy === "originalDate" && (
+                  <ArrowUpDown className={`h-4 w-4 ${sortOrder === "asc" ? "rotate-0" : "rotate-180"}`} />
+                )}
+              </Button>
+            </div>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline">
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filtros avanzados
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Filtros avanzados</SheetTitle>
+                  <SheetDescription>Filtra el histórico de procesos por diferentes criterios</SheetDescription>
+                </SheetHeader>
+                <HistoricoFiltros
+                  onFilter={handleApplyFilters}
+                  procesos={processes}
+                  clientes={activeClients}
+                  contadores={contadores}
+                  isLoadingClients={isLoadingClients}
+                  isLoadingProcesses={isLoadingProcesses}
+                  isLoadingContadores={isLoadingContadores}
+                  preselectedContadorId={preselectedContadorId}
+                  userRole={userRole}
+                />
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
 
         {useLocalData && (
