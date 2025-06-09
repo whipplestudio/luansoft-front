@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, MoreHorizontal, ChevronDown, CalendarIcon } from "lucide-react"
+import { PlusCircle, MoreHorizontal, ChevronDown, CalendarIcon, ArrowUpDown, User, Calendar } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { Client, Process, ProcessAssignment } from "@/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -24,7 +24,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ConfirmationDialog } from "@/components/ConfirmationDialog"
 import { Badge } from "@/components/ui/badge"
-import { Calendar } from "@/components/ui/calendar"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
@@ -58,6 +58,10 @@ export default function AsignarProcesosPage() {
     totalPages: 0,
   })
 
+  // Estados para el ordenamiento
+  const [sortBy, setSortBy] = useState<"client" | "date">("client")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+
   // Estados para la confirmación de eliminación
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
   const [assignmentToDelete, setAssignmentToDelete] = useState<ProcessAssignment | null>(null)
@@ -81,6 +85,21 @@ export default function AsignarProcesosPage() {
 
   // Añadir un nuevo estado para el período de pago
   const [newPaymentPeriod, setNewPaymentPeriod] = useState<"MONTHLY" | "ANNUAL">("MONTHLY")
+
+  // Función para alternar el ordenamiento
+  const toggleSort = (newSortBy: "client" | "date") => {
+    if (sortBy === newSortBy) {
+      // Si es el mismo campo, cambiar el orden
+      const newOrder = sortOrder === "asc" ? "desc" : "asc"
+      setSortOrder(newOrder)
+    } else {
+      // Si es un campo diferente, cambiar el campo y establecer orden ascendente
+      setSortBy(newSortBy)
+      setSortOrder("asc")
+    }
+    // Resetear a la página 1 cuando se cambia el ordenamiento
+    setPagination((prev) => ({ ...prev, page: 1 }))
+  }
 
   // Modificar la función fetchActiveClients para obtener el contadorId inmediatamente
   const fetchActiveClients = useCallback(async () => {
@@ -161,104 +180,109 @@ export default function AsignarProcesosPage() {
   // Modificar la función fetchClientsWithProcesses para adaptarla a la nueva estructura de respuesta de la API
   // Reemplazar la implementación actual de fetchClientsWithProcesses con esta nueva versión:
 
-  const fetchClientsWithProcesses = useCallback(async (page = 1, limit = 10, clientId?: string, processId?: string) => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("accessToken")
-      if (!token) {
-        throw new Error("No authentication token found")
-      }
+  const fetchClientsWithProcesses = useCallback(
+    async (page = 1, limit = 10, clientId?: string, processId?: string) => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No authentication token found")
+        }
 
-      // Construir los parámetros de la consulta
-      const params: Record<string, any> = {
-        page,
-        limit,
-      }
+        // Construir los parámetros de la consulta
+        const params: Record<string, any> = {
+          page,
+          limit,
+          sortBy,
+          sortOrder,
+        }
 
-      // Añadir clientId a los parámetros si está definido
-      if (clientId) {
-        params.clientId = clientId
-      }
+        // Añadir clientId a los parámetros si está definido
+        if (clientId) {
+          params.clientId = clientId
+        }
 
-      // Añadir processId a los parámetros si está definido
-      if (processId) {
-        params.processId = processId
-      }
+        // Añadir processId a los parámetros si está definido
+        if (processId) {
+          params.processId = processId
+        }
 
-      // Obtener el ID del contador si el usuario es un contador
-      const contadorId = getLoggedContadorId()
-      if (contadorId) {
-        params.contadorId = contadorId
-      }
+        // Obtener el ID del contador si el usuario es un contador
+        const contadorId = getLoggedContadorId()
+        if (contadorId) {
+          params.contadorId = contadorId
+        }
 
-      const response = await axiosInstance.get("/client/with-processes", {
-        params,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.data.success) {
-        const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
-
-        // Extraer los clientes únicos de las asignaciones
-        const uniqueClients = new Map<string, Client>()
-
-        data.forEach((assignment: any) => {
-          if (assignment.client && !uniqueClients.has(assignment.client.id)) {
-            uniqueClients.set(assignment.client.id, {
-              id: assignment.client.id,
-              company: assignment.client.company,
-              type: assignment.client.type,
-              status: assignment.client.status,
-              regimenFiscalId: assignment.client.regimenFiscalId || null,
-              contador: assignment.client.contador || null,
-              contacto: assignment.client.contacto || null,
-              isAssigned: assignment.client.isAssigned || false,
-              createdAt: assignment.client.createdAt || "",
-              updatedAt: assignment.client.updatedAt || "",
-            })
-          }
-        })
-
-        // Mapear las asignaciones de procesos directamente desde la respuesta
-        const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
-          id: assignment.id,
-          clientId: assignment.clientId,
-          processId: assignment.processId,
-          commitmentDate: assignment.date,
-          status: assignment.status,
-          graceDays: assignment.graceDays,
-          payrollFrequencies: assignment.payrollFrequencies || [],
-          paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
-          process: {
-            id: assignment.process.id,
-            name: assignment.process.name,
-            description: assignment.process.description,
-            progress: 0,
-            createdAt: assignment.process.createdAt,
-            updatedAt: assignment.process.updatedAt,
+        const response = await axiosInstance.get("/client/with-processes", {
+          params,
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        }))
-
-        setClients(Array.from(uniqueClients.values()))
-        setAssignments(assignmentsData)
-        setPagination({
-          page: currentPage || 1,
-          limit: pageLimit || 10,
-          total: total || 0,
-          totalPages: totalPages || 1,
         })
-      } else {
-        throw new Error(response.data.message || "Error fetching clients with processes")
+
+        if (response.data.success) {
+          const { data, total, page: currentPage, limit: pageLimit, totalPages } = response.data.data
+
+          // Extraer los clientes únicos de las asignaciones
+          const uniqueClients = new Map<string, Client>()
+
+          data.forEach((assignment: any) => {
+            if (assignment.client && !uniqueClients.has(assignment.client.id)) {
+              uniqueClients.set(assignment.client.id, {
+                id: assignment.client.id,
+                company: assignment.client.company,
+                type: assignment.client.type,
+                status: assignment.client.status,
+                regimenFiscalId: assignment.client.regimenFiscalId || null,
+                contador: assignment.client.contador || null,
+                contacto: assignment.client.contacto || null,
+                isAssigned: assignment.client.isAssigned || false,
+                createdAt: assignment.client.createdAt || "",
+                updatedAt: assignment.client.updatedAt || "",
+              })
+            }
+          })
+
+          // Mapear las asignaciones de procesos directamente desde la respuesta
+          const assignmentsData: ProcessAssignment[] = data.map((assignment: any) => ({
+            id: assignment.id,
+            clientId: assignment.clientId,
+            processId: assignment.processId,
+            commitmentDate: assignment.date,
+            status: assignment.status,
+            graceDays: assignment.graceDays,
+            payrollFrequencies: assignment.payrollFrequencies || [],
+            paymentPeriod: assignment.paymentPeriod, // Asegurarse de incluir el paymentPeriod
+            process: {
+              id: assignment.process.id,
+              name: assignment.process.name,
+              description: assignment.process.description,
+              progress: 0,
+              createdAt: assignment.process.createdAt,
+              updatedAt: assignment.process.updatedAt,
+            },
+          }))
+
+          setClients(Array.from(uniqueClients.values()))
+          setAssignments(assignmentsData)
+          setPagination({
+            page: currentPage || 1,
+            limit: pageLimit || 10,
+            total: total || 0,
+            totalPages: totalPages || 1,
+          })
+        } else {
+          throw new Error(response.data.message || "Error fetching clients with processes")
+        }
+      } catch (error) {
+        console.error("Error fetching clients with processes:", error)
+        toast.error("Error al cargar los clientes con procesos")
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching clients with processes:", error)
-      toast.error("Error al cargar los clientes con procesos")
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+    },
+    [sortBy, sortOrder],
+  )
 
   // Buscar la función fetchUnassignedClients y modificarla para incluir el contadorId cuando el usuario es un contador
   const fetchUnassignedClients = useCallback(async () => {
@@ -377,6 +401,8 @@ export default function AsignarProcesosPage() {
     pagination.limit,
     selectedClient,
     selectedProcess,
+    sortBy,
+    sortOrder,
   ])
 
   // Manejar cambio de cliente seleccionado
@@ -930,11 +956,38 @@ export default function AsignarProcesosPage() {
         <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Asignación de Procesos</h1>
-          {hasPermission(userRole as RoleType, "asignar-procesos", "create") && (
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Asignar Proceso
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Botones de ordenamiento */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant={sortBy === "client" ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleSort("client")}
+                className="flex items-center gap-1"
+              >
+                <User className="h-4 w-4" />
+                Cliente
+                {sortBy === "client" && (
+                  <ArrowUpDown className={`h-3 w-3 ${sortOrder === "desc" ? "rotate-180" : ""}`} />
+                )}
+              </Button>
+              <Button
+                variant={sortBy === "date" ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleSort("date")}
+                className="flex items-center gap-1"
+              >
+                <Calendar className="h-4 w-4" />
+                Fecha
+                {sortBy === "date" && <ArrowUpDown className={`h-3 w-3 ${sortOrder === "desc" ? "rotate-180" : ""}`} />}
+              </Button>
+            </div>
+            {hasPermission(userRole as RoleType, "asignar-procesos", "create") && (
+              <Button onClick={() => setIsDialogOpen(true)}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Asignar Proceso
+              </Button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           {/* Filtro por Cliente */}
@@ -1134,7 +1187,7 @@ export default function AsignarProcesosPage() {
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                              <Calendar
+                              <CalendarComponent
                                 mode="single"
                                 selected={newCommitmentDate}
                                 onSelect={setNewCommitmentDate}
