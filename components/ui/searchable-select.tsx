@@ -148,9 +148,8 @@ export function SearchableSelect({
                   return (
                     <div
                       key={option.value}
-                      className={`group flex items-center px-2 py-1.5 cursor-pointer hover:bg-accent ${
-                        option.disabled ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
+                      className={`group flex items-center px-2 py-1.5 cursor-pointer hover:bg-accent ${option.disabled ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
                       onClick={() => !option.disabled && handleMultiSelectionChange(option.value)}
                     >
                       <Checkbox
@@ -279,7 +278,12 @@ export function SearchableSelect({
                     )}
                     onClick={() => !option.disabled && handleSingleSelectionChange(option.value)}
                   >
-                    <div className="flex-grow bg-transparent group-hover:text-white">
+                    <div className={cn(
+                      "flex-grow bg-transparent",
+                      (selected as string[])?.includes(option.value)
+                        ? "text-white"
+                        : "group-hover:text-white"
+                    )}>
                       {option.label}
                       {option.description && (
                         <p className="text-xs text-muted-foreground group-hover:text-gray-200">{option.description}</p>
