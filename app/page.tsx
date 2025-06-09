@@ -470,8 +470,7 @@ export default function DashboardPage() {
                 <Badge
                   key={index}
                   variant="outline"
-                  className={`text-xs cursor-pointer transition-colors hover:opacity-80 ${
-                    isCompleted
+                  className={`text-xs cursor-pointer transition-colors hover:opacity-80 ${isCompleted
                       ? "bg-green-100 text-green-800 border-green-300"
                       : process.deliveryStatus === "onTime"
                         ? "bg-green-100 text-green-800 border-green-300"
@@ -480,7 +479,7 @@ export default function DashboardPage() {
                           : process.deliveryStatus === "delayed"
                             ? "bg-red-100 text-red-800 border-red-300"
                             : "bg-gray-100 text-gray-800 border-gray-300"
-                  }`}
+                    }`}
                   onClick={(e) => {
                     e.stopPropagation()
                     if (isCompleted && hasFile) {
@@ -889,9 +888,9 @@ export default function DashboardPage() {
 
       // Usar debounce para la llamada al backend
       clearTimeout((window as any).companyFilterTimeout)
-      ;(window as any).companyFilterTimeout = setTimeout(() => {
-        handleFilter("companyName", value)
-      }, 500)
+        ; (window as any).companyFilterTimeout = setTimeout(() => {
+          handleFilter("companyName", value)
+        }, 500)
     }
 
     // Actualizar el input local cuando cambia el filtro global
@@ -1183,82 +1182,92 @@ export default function DashboardPage() {
           )}
           <div className="flex flex-wrap gap-2 items-center">
             {/* Clase común para todos los botones de la barra de herramientas */}
-            <Button
-              variant="outline"
-              className="h-10 px-4 flex items-center justify-center"
-              onClick={() => {
-                // Cerrar sesión eliminando datos de autenticación
-                localStorage.removeItem("accessToken")
-                localStorage.removeItem("refreshToken")
-                localStorage.removeItem("user")
-                localStorage.removeItem("isAuthenticated")
-                localStorage.removeItem("userRole")
-                // Redirigir a la página de login
-                router.push("/login")
-              }}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              <span className="whitespace-nowrap">Cerrar sesión</span>
-            </Button>
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="h-10 w-10 flex items-center justify-center">
-                  <Filter className="h-4 w-4" />
-                  <span className="sr-only">Filtros</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle>Filtros</SheetTitle>
-                  <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
-                </SheetHeader>
-                <div className="mt-4">
-                  <FilterContent />
-                </div>
-              </SheetContent>
-            </Sheet>
-            <Button onClick={toggleSortOrder} variant="outline" className="h-10 px-4 flex items-center justify-center">
-              {sortCompany === "asc" ? (
+            {
+              !isFullscreen && (
                 <>
-                  <ArrowUpDown className="mr-2 h-4 w-4" />
-                  <span className="whitespace-nowrap">A-Z</span>
+                  <Button
+                    variant="outline"
+                    className="h-10 px-4 flex items-center justify-center"
+                    onClick={() => {
+                      // Cerrar sesión eliminando datos de autenticación
+                      localStorage.removeItem("accessToken")
+                      localStorage.removeItem("refreshToken")
+                      localStorage.removeItem("user")
+                      localStorage.removeItem("isAuthenticated")
+                      localStorage.removeItem("userRole")
+                      // Redirigir a la página de login
+                      router.push("/login")
+                    }}
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    <span className="whitespace-nowrap">Cerrar sesión</span>
+                  </Button>
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button variant="outline" className="h-10 w-10 flex items-center justify-center">
+                        <Filter className="h-4 w-4" />
+                        <span className="sr-only">Filtros</span>
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent>
+                      <SheetHeader>
+                        <SheetTitle>Filtros</SheetTitle>
+                        <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
+                      </SheetHeader>
+                      <div className="mt-4">
+                        <FilterContent />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                  <Button onClick={toggleSortOrder} variant="outline" className="h-10 px-4 flex items-center justify-center">
+                    {sortCompany === "asc" ? (
+                      <>
+                        <ArrowUpDown className="mr-2 h-4 w-4" />
+                        <span className="whitespace-nowrap">A-Z</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUpDown className="mr-2 h-4 w-4 rotate-180" />
+                        <span className="whitespace-nowrap">Z-A</span>
+                      </>
+                    )}
+                  </Button>
                 </>
-              ) : (
-                <>
-                  <ArrowUpDown className="mr-2 h-4 w-4 rotate-180" />
-                  <span className="whitespace-nowrap">Z-A</span>
-                </>
-              )}
-            </Button>
+              )
+            }
             <Button onClick={toggleFullscreen} variant="outline" className="h-10 w-10 flex items-center justify-center">
               {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
               <span className="sr-only">{isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}</span>
             </Button>
-            <Select value={viewMode} onValueChange={handleViewModeChange}>
-              <SelectTrigger className="h-10 w-auto whitespace-nowrap flex items-center justify-center">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="grid">
-                  <div className="flex items-center whitespace-nowrap">
-                    <Grid className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">Cuadrícula</span>
-                    <span className="sm:hidden" title="Vista Cuadrícula">
-                      <Grid className="h-4 w-4" />
-                    </span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="table">
-                  <div className="flex items-center whitespace-nowrap">
-                    <List className="mr-2 h-4 w-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">Tabla</span>
-                    <span className="sm:hidden" title="Vista Tabla">
-                      <List className="h-4 w-4" />
-                    </span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            {
+              !isFullscreen && (
+                <Select value={viewMode} onValueChange={handleViewModeChange}>
+                  <SelectTrigger className="h-10 w-auto whitespace-nowrap flex items-center justify-center">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="grid">
+                      <div className="flex items-center whitespace-nowrap">
+                        <Grid className="mr-2 h-4 w-4 flex-shrink-0" />
+                        <span className="hidden sm:inline">Cuadrícula</span>
+                        <span className="sm:hidden" title="Vista Cuadrícula">
+                          <Grid className="h-4 w-4" />
+                        </span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="table">
+                      <div className="flex items-center whitespace-nowrap">
+                        <List className="mr-2 h-4 w-4 flex-shrink-0" />
+                        <span className="hidden sm:inline">Tabla</span>
+                        <span className="sm:hidden" title="Vista Tabla">
+                          <List className="h-4 w-4" />
+                        </span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )
+            }
           </div>
         </div>
 
@@ -1495,5 +1504,5 @@ export default function DashboardPage() {
     )
   }
 
-  return <div className={`container mx-auto p-4 ${isFullscreen ? "h-screen overflow-hidden" : ""}`}>{content}</div>
+  return <div className={`w-full max-w-[2560px] mx-auto py-2 px-2 sm:py-4 sm:px-4 2xl:px-0 ${isFullscreen ? "fullscreen-mode" : ""}`}>{content}</div>
 }
