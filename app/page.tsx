@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { ArrowUpDown, Filter, Maximize, Minimize, Grid, List, ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowUpDown, Filter, Maximize, Minimize, Grid, List, ArrowLeft, Loader2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable } from "@/components/data-table"
@@ -25,8 +25,10 @@ import { toast } from "sonner"
 import { debounce } from "lodash"
 import { Logo } from "@/components/Logo"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DocumentViewerModal } from "@/components/DocumentViewerModal"
 
-const ITEMS_PER_PAGE = 100
+const GRID_ITEMS_PER_PAGE = 100
+const DEFAULT_TABLE_ITEMS_PER_PAGE = 20
 const BULK_DISPLAY_TIME = 10000 // Time in milliseconds to display each bulk (10 seconds)
 
 // Define the ApiResponse interface
@@ -82,78 +84,6 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
     originalData: client,
   }
 }
-
-// Update the columns definition to match the new structure
-const columns: ColumnDef<FiscalDeliverable>[] = [
-  {
-    accessorKey: "client",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="text-xs">
-        Contacto
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => (
-      <div className="space-y-1">
-        <div className="text-xs font-medium">{row.getValue("client")}</div>
-        <div className="text-xs text-muted-foreground">{row.original.company}</div>
-        <ProgressBar percentage={row.original.progressPercentage} />
-      </div>
-    ),
-  },
-  {
-    accessorKey: "responsible",
-    header: "Responsable",
-    cell: ({ row }) => <div className="text-xs">{row.getValue("responsible")}</div>,
-  },
-  // Modificar la columna de procesos para mostrar el estado de entrega
-  {
-    accessorKey: "processes",
-    header: "Procesos",
-    cell: ({ row }) => {
-      const processes = row.original.processes
-      return (
-        <div className="space-y-1">
-          {processes.map((process, index) => (
-            <Badge
-              key={index}
-              variant="outline"
-              className={`text-xs ${
-                process.deliveryStatus === "onTime"
-                  ? "bg-green-100 text-green-800 border-green-300"
-                  : process.deliveryStatus === "atRisk"
-                    ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-                    : process.deliveryStatus === "delayed"
-                      ? "bg-red-100 text-red-800 border-red-300"
-                      : process.status === "completed"
-                        ? "bg-green-100 text-green-800 border-green-300"
-                        : process.status === "pending"
-                          ? "bg-red-100 text-red-800 border-red-300"
-                          : "bg-yellow-100 text-yellow-800 border-yellow-300"
-              }`}
-            >
-              {process.name}
-            </Badge>
-          ))}
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: "progressPercentage",
-    header: "Progreso",
-    cell: ({ row }) => {
-      const progress = row.getValue("progressPercentage") as number
-      const statusColor = progress >= 66 ? "green" : progress >= 33 ? "yellow" : "red"
-      return (
-        <div className="flex items-center">
-          <div className={`h-2 w-2 rounded-full mr-2 bg-${statusColor}-500`}></div>
-          <span className="text-xs">{progress}%</span>
-        </div>
-      )
-    },
-  },
-]
 
 const mapDeliveryStatusToSemaphore = (status: string): SemaphoreStatus => {
   switch (status) {
@@ -259,27 +189,33 @@ const InfiniteScrollDisplay = ({
   // Auto-scroll to the next bulk after a certain time with fade effect
   // const [timer, setTimer] = useState<NodeJS.Timeout | null>(null)
 
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null)
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Start fade out
-      setIsVisible(false)
+    let intervalId: NodeJS.Timeout | null = null
 
-      // After fade out completes, change the bulk and fade in
-      setTimeout(() => {
-        setCurrentBulkIndex((prevIndex) => (prevIndex + 1) % totalBulks)
-        // Start fade in
-        setIsVisible(true)
-      }, 500) // This should match the CSS transition duration
-    }, BULK_DISPLAY_TIME)
+    const startInterval = () => {
+      intervalId = setInterval(() => {
+        // Start fade out
+        setIsVisible(false)
 
-    timerRef.current = interval // Store the interval in the ref
+        // After fade out completes, change the bulk and fade in
+        setTimeout(() => {
+          setCurrentBulkIndex((prevIndex) => (prevIndex + 1) % totalBulks)
+          // Start fade in
+          setIsVisible(true)
+        }, 500) // This should match the CSS transition duration
+      }, BULK_DISPLAY_TIME)
+    }
+
+    startInterval()
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current) // Clear the interval using the ref
+      if (intervalId) {
+        clearInterval(intervalId)
       }
     }
-  }, [totalBulks])
+  }, [totalBulks, setIsVisible, setCurrentBulkIndex])
 
   // Get the current bulk of clients to display
   const currentBulk = clientBulks[currentBulkIndex] || []
@@ -371,6 +307,9 @@ export default function DashboardPage() {
   const [totalItems, setTotalItems] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid")
+  const [currentLimit, setCurrentLimit] = useState(GRID_ITEMS_PER_PAGE)
+  // Nuevo estado específico para el límite de la vista tabla
+  const [tableLimit, setTableLimit] = useState(DEFAULT_TABLE_ITEMS_PER_PAGE)
   // Add a new state for contacts after the allProcesses state
   const [allContacts, setAllContacts] = useState<{ id: string; name: string }[]>([])
   // Add contactIds to the filters state
@@ -392,6 +331,176 @@ export default function DashboardPage() {
   const [initialLoad, setInitialLoad] = useState(true)
   const [isClient, setIsClient] = useState(false)
   const [sortCompany, setSortCompany] = useState<"asc" | "desc">("asc")
+
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null)
+  const [documentType, setDocumentType] = useState<"pdf" | "image">("pdf")
+  const [documentTitle, setDocumentTitle] = useState<string>("")
+  const [isDocumentViewerOpen, setIsDocumentViewerOpen] = useState(false)
+  const [fileName, setFileName] = useState<string>("")
+  const [fileId, setFileId] = useState<string>("")
+  const [isLoadingDocument, setIsLoadingDocument] = useState(false)
+
+  // Función para obtener la URL de descarga de un archivo
+  const getFileDownloadUrl = async (fileId: string): Promise<string | null> => {
+    try {
+      setIsLoadingDocument(true)
+      const response = await axiosInstance.get(`/file/${fileId}/download-url`)
+
+      if (response.data.success && response.data.data.url) {
+        return response.data.data.url
+      } else {
+        toast.error(`Error al obtener la URL del archivo: ${response.data.message}`)
+        return null
+      }
+    } catch (error) {
+      console.error("Error al obtener la URL de descarga:", error)
+      toast.error("No se pudo obtener la URL del archivo")
+      return null
+    } finally {
+      setIsLoadingDocument(false)
+    }
+  }
+
+  // Función para abrir el visor de documentos
+  const handleOpenDocumentViewer = async (process: any) => {
+    if (process.file) {
+      setIsLoadingDocument(true)
+      try {
+        // Obtener la URL de descarga válida
+        const downloadUrl = await getFileDownloadUrl(process.file.id)
+
+        if (downloadUrl) {
+          setDocumentUrl(downloadUrl)
+          setDocumentType(process.file.type.includes("pdf") ? "pdf" : "image")
+          setDocumentTitle(process.name)
+          setFileName(process.file.originalName || `${process.name}.pdf`)
+          setFileId(process.file.id)
+          setIsDocumentViewerOpen(true)
+        } else {
+          toast.error("No se pudo obtener la URL del documento")
+        }
+      } catch (error) {
+        console.error("Error al preparar el documento para visualización:", error)
+        toast.error("Error al preparar el documento para visualización")
+      } finally {
+        setIsLoadingDocument(false)
+      }
+    }
+  }
+
+  // Función para descargar el documento
+  const handleDownloadDocument = async () => {
+    try {
+      setIsLoadingDocument(true)
+      if (!fileId) {
+        toast.error("ID de archivo no disponible")
+        return
+      }
+
+      const url = await getFileDownloadUrl(fileId)
+
+      if (url) {
+        // Realizar la petición para obtener el archivo como blob
+        const response = await axiosInstance.get(url, { responseType: "blob" })
+        // Crear un objeto Blob a partir de la respuesta
+        const blob = new Blob([response.data])
+        // Crear un URL de objeto para el blob
+        const blobUrl = window.URL.createObjectURL(blob)
+        // Crear un enlace de descarga
+        const link = document.createElement("a")
+        link.href = blobUrl
+        link.setAttribute("download", fileName)
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(blobUrl)
+      } else {
+        toast.error("No se pudo obtener la URL de descarga")
+      }
+    } catch (error) {
+      console.error("Error al descargar el archivo:", error)
+      toast.error("No se pudo descargar el archivo")
+    } finally {
+      setIsLoadingDocument(false)
+    }
+  }
+
+  // Definir las columnas dentro del componente para tener acceso a handleOpenDocumentViewer
+  const columns: ColumnDef<FiscalDeliverable>[] = [
+    {
+      accessorKey: "client",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="text-xs"
+        >
+          Contacto
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground">{row.original.company}</div>
+          <div className="text-xs font-medium">{row.getValue("client")}</div>
+          <ProgressBar percentage={row.original.progressPercentage} />
+        </div>
+      ),
+    },
+    {
+      accessorKey: "responsible",
+      header: "Responsable",
+      cell: ({ row }) => <div className="text-xs">{row.getValue("responsible")}</div>,
+    },
+    // Modificar la columna de procesos para mostrar el estado de entrega
+    {
+      accessorKey: "processes",
+      header: "Procesos",
+      cell: ({ row }) => {
+        const processes = row.original.processes
+        const userRole = localStorage.getItem("userRole")
+
+        return (
+          <div className="flex flex-wrap gap-2">
+            {processes.map((process, index) => {
+              const isCompleted = process.deliveryStatus === "completed"
+              const hasFile = process.file && userRole !== "dashboard"
+
+              return (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className={`text-xs cursor-pointer transition-colors hover:opacity-80 ${
+                    isCompleted
+                      ? "bg-green-100 text-green-800 border-green-300"
+                      : process.deliveryStatus === "onTime"
+                        ? "bg-green-100 text-green-800 border-green-300"
+                        : process.deliveryStatus === "atRisk"
+                          ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                          : process.deliveryStatus === "delayed"
+                            ? "bg-red-100 text-red-800 border-red-300"
+                            : "bg-gray-100 text-gray-800 border-gray-300"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (isCompleted && hasFile) {
+                      handleOpenDocumentViewer(process)
+                    }
+                  }}
+                  title={isCompleted && hasFile ? "Click para ver documento" : process.name}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>{process.name}</span>
+                    {isCompleted && hasFile && <Check className="h-3 w-3" />}
+                  </div>
+                </Badge>
+              )
+            })}
+          </div>
+        )
+      },
+    },
+  ]
 
   // Función para obtener los datos del dashboard
   const fetchDashboardData = useCallback(async () => {
@@ -508,7 +617,7 @@ export default function DashboardPage() {
 
   // Función para obtener los clientes con sus detalles
   const fetchClients = useCallback(
-    async (page = 1, limit = ITEMS_PER_PAGE, filters = {}) => {
+    async (page = 1, limit = currentLimit, filters = {}) => {
       setIsLoading(true)
       try {
         const token = localStorage.getItem("accessToken")
@@ -519,7 +628,7 @@ export default function DashboardPage() {
         // Construir los parámetros de la consulta
         const params: Record<string, any> = {
           page,
-          limit,
+          limit, // Usar el parámetro limit en lugar de ITEMS_PER_PAGE
           sortCompany, // Añadir el parámetro de ordenamiento
         }
 
@@ -571,7 +680,7 @@ export default function DashboardPage() {
             return searchParams.toString()
           },
         })
-        
+
         if (response.data.success) {
           const { data, pagination } = response.data.data
 
@@ -592,7 +701,7 @@ export default function DashboardPage() {
         setIsLoading(false)
       }
     },
-    [sortCompany],
+    [sortCompany, currentLimit],
   ) // Añadir sortCompany como dependencia
 
   // Function to fetch all clients for fullscreen mode
@@ -609,7 +718,7 @@ export default function DashboardPage() {
       // Use a very high limit to get all clients at once
       const params: Record<string, any> = {
         page: 1,
-        limit: 10000, // Set a very high limit to get all clients at once
+        limit: currentLimit === GRID_ITEMS_PER_PAGE ? 10000 : currentLimit, // Para fullscreen usar 10000, sino el límite actual
         sortCompany, // Añadir el parámetro de ordenamiento
       }
 
@@ -666,7 +775,7 @@ export default function DashboardPage() {
     } finally {
       setIsLoadingAllClients(false)
     }
-  }, [filters, isLoadingAllClients, sortCompany]) // Añadir sortCompany como dependencia
+  }, [filters, isLoadingAllClients, sortCompany, currentLimit]) // Añadir sortCompany como dependencia
 
   // Cargar datos iniciales
   // Update the useEffect to call fetchContacts
@@ -678,7 +787,7 @@ export default function DashboardPage() {
       // Resetear a la página 1 cuando cambian los filtros
       setCurrentPage(1)
       // Aplicar los filtros
-      fetchClients(1, ITEMS_PER_PAGE, newFilters)
+      fetchClients(1, currentLimit, newFilters)
       return newFilters
     })
   }
@@ -712,13 +821,21 @@ export default function DashboardPage() {
 
     setFilters(emptyFilters)
     setCurrentPage(1)
-    fetchClients(1, ITEMS_PER_PAGE, emptyFilters)
+    fetchClients(1, currentLimit, emptyFilters)
   }
 
   // Manejar cambio de página
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
-    fetchClients(page, ITEMS_PER_PAGE, filters)
+    fetchClients(page, currentLimit, filters)
+  }
+
+  // Nueva función para manejar el cambio de filas por página en la tabla
+  const handlePerPageChange = (newPerPage: number) => {
+    setTableLimit(newPerPage)
+    setCurrentLimit(newPerPage)
+    setCurrentPage(1) // Resetear a página 1
+    fetchClients(1, newPerPage, filters)
   }
 
   // Debounced function para el filtro de empresa
@@ -884,7 +1001,31 @@ export default function DashboardPage() {
   const toggleSortOrder = () => {
     const newOrder = sortCompany === "asc" ? "desc" : "asc"
     setSortCompany(newOrder)
-    fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+    fetchClients(currentPage, currentLimit, filters)
+  }
+
+  const handleCardClick = (client: FiscalDeliverable) => {
+    setSelectedClient(client)
+    setIsDetailDialogOpen(true)
+  }
+
+  const handleViewModeChange = (newViewMode: "grid" | "table") => {
+    let newLimit: number
+
+    if (newViewMode === "grid") {
+      // Vista cuadrícula: usar límite fijo de 100
+      newLimit = GRID_ITEMS_PER_PAGE
+    } else {
+      // Vista tabla: usar el límite guardado para tabla
+      newLimit = tableLimit
+    }
+
+    setViewMode(newViewMode)
+    setCurrentLimit(newLimit)
+    setCurrentPage(1) // Resetear a la página 1
+
+    // Hacer nueva llamada con el límite correcto
+    fetchClients(1, newLimit, filters)
   }
 
   // Buscar el useEffect que maneja el modo de pantalla completa (cerca de la línea 1000)
@@ -928,10 +1069,6 @@ export default function DashboardPage() {
     }
   }
 
-  const handleCardClick = (client: FiscalDeliverable) => {
-    setSelectedClient(client)
-    setIsDetailDialogOpen(true)
-  }
   // Fetch all clients only once when entering fullscreen mode
   useEffect(() => {
     if (isFullscreen && allClientsData.length === 0 && !isLoadingAllClients) {
@@ -996,16 +1133,25 @@ export default function DashboardPage() {
           ...filters,
           contactoIds: [contactoId],
         }
-        await fetchClients(currentPage, ITEMS_PER_PAGE, contactoFilters)
+        await fetchClients(currentPage, currentLimit, contactoFilters)
       } else {
-        await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+        await fetchClients(currentPage, currentLimit, filters)
       }
     } else {
-      await fetchClients(currentPage, ITEMS_PER_PAGE, filters)
+      await fetchClients(currentPage, currentLimit, filters)
     }
 
     setInitialLoad(false)
-  }, [fetchDashboardData, fetchContadores, fetchProcesses, fetchContacts, fetchClients, currentPage, filters])
+  }, [
+    fetchDashboardData,
+    fetchContadores,
+    fetchProcesses,
+    fetchContacts,
+    fetchClients,
+    currentPage,
+    filters,
+    currentLimit,
+  ])
 
   // Move the useEffect hook that calls fetchData outside the conditional rendering
   useEffect(() => {
@@ -1035,10 +1181,11 @@ export default function DashboardPage() {
           ) : (
             <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-0">Semáforo de Clientes</h1>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Clase común para todos los botones de la barra de herramientas */}
             <Button
               variant="outline"
-              size="sm"
+              className="h-10 px-4 flex items-center justify-center"
               onClick={() => {
                 // Cerrar sesión eliminando datos de autenticación
                 localStorage.removeItem("accessToken")
@@ -1051,11 +1198,11 @@ export default function DashboardPage() {
               }}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Cerrar sesión
+              <span className="whitespace-nowrap">Cerrar sesión</span>
             </Button>
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 w-8">
+                <Button variant="outline" className="h-10 w-10 flex items-center justify-center">
                   <Filter className="h-4 w-4" />
                   <span className="sr-only">Filtros</span>
                 </Button>
@@ -1070,38 +1217,44 @@ export default function DashboardPage() {
                 </div>
               </SheetContent>
             </Sheet>
-            <Button onClick={toggleSortOrder} variant="outline" size="sm" className="h-8 px-3">
+            <Button onClick={toggleSortOrder} variant="outline" className="h-10 px-4 flex items-center justify-center">
               {sortCompany === "asc" ? (
                 <>
                   <ArrowUpDown className="mr-2 h-4 w-4" />
-                  A-Z
+                  <span className="whitespace-nowrap">A-Z</span>
                 </>
               ) : (
                 <>
                   <ArrowUpDown className="mr-2 h-4 w-4 rotate-180" />
-                  Z-A
+                  <span className="whitespace-nowrap">Z-A</span>
                 </>
               )}
             </Button>
-            <Button onClick={toggleFullscreen} variant="outline" size="sm" className="h-8 w-8">
+            <Button onClick={toggleFullscreen} variant="outline" className="h-10 w-10 flex items-center justify-center">
               {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
               <span className="sr-only">{isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}</span>
             </Button>
-            <Select value={viewMode} onValueChange={(value: "grid" | "table") => setViewMode(value)}>
-              <SelectTrigger className="w-[120px]">
+            <Select value={viewMode} onValueChange={handleViewModeChange}>
+              <SelectTrigger className="h-10 w-auto whitespace-nowrap flex items-center justify-center">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="grid">
-                  <div className="flex items-center">
-                    <Grid className="mr-2 h-4 w-4" />
-                    Cuadrícula
+                  <div className="flex items-center whitespace-nowrap">
+                    <Grid className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">Cuadrícula</span>
+                    <span className="sm:hidden" title="Vista Cuadrícula">
+                      <Grid className="h-4 w-4" />
+                    </span>
                   </div>
                 </SelectItem>
                 <SelectItem value="table">
-                  <div className="flex items-center">
-                    <List className="mr-2 h-4 w-4" />
-                    Tabla
+                  <div className="flex items-center whitespace-nowrap">
+                    <List className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">Tabla</span>
+                    <span className="sm:hidden" title="Vista Tabla">
+                      <List className="h-4 w-4" />
+                    </span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -1257,7 +1410,7 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <Tabs value={viewMode} onValueChange={(value: string) => setViewMode(value as "grid" | "table")}>
+          <Tabs value={viewMode} onValueChange={handleViewModeChange}>
             <TabsContent value="grid" className="mt-0">
               {isLoading ? (
                 <div className="flex justify-center items-center h-64">
@@ -1286,52 +1439,61 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-10 text-gray-500">
-                  No se encontraron clientes con los filtros aplicados
-                </div>
+                <div className="text-center py-10 text-gray-500">No se encontraron clientes</div>
               )}
             </TabsContent>
             <TabsContent value="table" className="mt-0">
-              <DataTable
-                columns={columns}
-                data={clientsData}
-                isLoading={isLoading}
-                pagination={{
-                  pageCount: totalPages,
-                  page: currentPage,
-                  onPageChange: handlePageChange,
-                  perPage: ITEMS_PER_PAGE,
-                  onPerPageChange: () => {}, // No implementado por ahora
-                }}
-              />
+              {isLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : (
+                <DataTable
+                  columns={columns}
+                  data={clientsData}
+                  onRowClick={handleCardClick}
+                  pagination={{
+                    currentPage,
+                    totalPages,
+                    totalItems,
+                    onPageChange: handlePageChange,
+                    perPage: tableLimit,
+                    onPerPageChange: handlePerPageChange,
+                  }}
+                />
+              )}
             </TabsContent>
           </Tabs>
         )}
 
-        {!isFullscreen && (
+        {/* Paginación para vista cuadrícula */}
+        {!isFullscreen && viewMode === "grid" && (
           <div className="mt-4 flex justify-center">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-              className="text-xs sm:text-sm"
-            />
+            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
           </div>
         )}
+
+        {/* Diálogo de detalles del cliente */}
         <ClientDetailDialog
+          client={selectedClient}
           isOpen={isDetailDialogOpen}
           onClose={() => setIsDetailDialogOpen(false)}
-          client={selectedClient}
+        />
+
+        {/* Modal del visor de documentos */}
+        <DocumentViewerModal
+          isOpen={isDocumentViewerOpen}
+          onClose={() => setIsDocumentViewerOpen(false)}
+          documentUrl={documentUrl}
+          documentType={documentType}
+          title={documentTitle}
+          fileName={fileName}
+          onDownload={handleDownloadDocument}
+          isLoading={isLoadingDocument}
         />
       </>
     )
   }
 
-  return (
-    <div
-      className={`w-full max-w-[2560px] mx-auto py-2 px-2 sm:py-4 sm:px-4 2xl:px-0 ${isFullscreen ? "fullscreen-mode" : ""}`}
-    >
-      {content}
-    </div>
-  )
+  return <div className={`container mx-auto p-4 ${isFullscreen ? "h-screen overflow-hidden" : ""}`}>{content}</div>
 }
