@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { DataTable } from "@/components/data-table"
 import { columns } from "./columns"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, ArrowUp, ArrowDown } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RegimenFiscalForm } from "@/components/RegimenFiscalForm"
 import type { RegimenFiscal } from "@/types"
@@ -49,12 +49,13 @@ export default function RegimenesFiscalesPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
   const [regimenToToggle, setRegimenToToggle] = useState<RegimenFiscal | null>(null)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const { toast } = useToast()
 
-  const fetchData = async (page = currentPage, filter = searchValue, perPage = itemsPerPage) => {
+  const fetchData = async (page = currentPage, filter = searchValue, perPage = itemsPerPage, order = sortOrder) => {
     setIsLoading(true)
     try {
-      const response = await getRegimenesFiscales(page, perPage, filter)
+      const response = await getRegimenesFiscales(page, perPage, filter, order)
       if (response.success) {
         setRegimenesFiscales(response.data.data)
         setTotalPages(response.data.totalPages)
@@ -73,6 +74,12 @@ export default function RegimenesFiscalesPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchData(1, searchValue, itemsPerPage, newOrder)
   }
 
   useEffect(() => {
@@ -223,12 +230,27 @@ export default function RegimenesFiscalesPage() {
       <div className="container mx-auto py-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Regímenes Fiscales</h1>
-          {hasPermission(userRole as RoleType, "regimenes-fiscales", "create") && (
-            <Button onClick={handleOpenCreateDialog}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Régimen Fiscal
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleSortOrder} className="flex items-center gap-2">
+              {sortOrder === "asc" ? (
+                <>
+                  <ArrowUp className="h-4 w-4" />
+                  A-Z
+                </>
+              ) : (
+                <>
+                  <ArrowDown className="h-4 w-4" />
+                  Z-A
+                </>
+              )}
             </Button>
-          )}
+            {hasPermission(userRole as RoleType, "regimenes-fiscales", "create") && (
+              <Button onClick={handleOpenCreateDialog}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Régimen Fiscal
+              </Button>
+            )}
+          </div>
         </div>
 
         <DataTable

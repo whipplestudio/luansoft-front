@@ -39,10 +39,10 @@ export interface RegimenFiscalCreateUpdateDto {
   descripcion?: string
 }
 
-export const getRegimenesFiscales = async (page = 1, limit = 10, filter = "") => {
+export const getRegimenesFiscales = async (page = 1, limit = 10, filter = "", order = "asc") => {
   try {
     const response = await axiosInstance.get<RegimenFiscalResponse>(
-      `/regimenfiscal?page=${page}&limit=${limit}${filter ? `&filter=${filter}` : ""}`,
+      `/regimenfiscal?page=${page}&limit=${limit}${filter ? `&filter=${filter}` : ""}&order=${order}`,
     )
     return response.data
   } catch (error) {
