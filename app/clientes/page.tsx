@@ -35,6 +35,20 @@ interface ApiClient {
   payroll: boolean
   payrollFrequencies: string[]
   regimenFiscalId: string
+  isContractSigned: boolean
+  contractFile: {
+    id: string
+    originalName: string
+    url: string
+    thumbnailUrl: string | null
+    type: string
+    bucket: string
+    folder: string
+    size: number
+    clientContractId: string
+    createdAt: string
+    updatedAt: string
+  } | null
   createdAt: string
   updatedAt: string
   contador: {
@@ -240,10 +254,21 @@ export default function ClientesPage() {
           setContactos(response.data.data.data)
           setTotalPages(response.data.data.totalPages)
           setTotalItems(response.data.data.total)
+        } else {
+          console.error("Error en la respuesta de la API:", response.data.message)
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar los clientes",
+            variant: "destructive",
+          })
         }
       } catch (error) {
         console.error("Error al obtener clientes:", error)
-        toast.error("No se pudieron cargar los clientes")
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los clientes",
+          variant: "destructive",
+        })
       } finally {
         setIsLoading(false)
       }

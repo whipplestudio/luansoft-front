@@ -47,6 +47,20 @@ export interface Client {
   type: "FISICA" | "MORAL"
   status: "ACTIVE" | "INACTIVE"
   regimenFiscalId: string
+  isContractSigned?: boolean
+  contractFile?: {
+    id: string
+    originalName: string
+    url: string
+    thumbnailUrl: string | null
+    type: string
+    bucket: string
+    folder: string
+    size: number
+    clientContractId: string
+    createdAt: string
+    updatedAt: string
+  } | null
   contador: {
     id: string
     name: string

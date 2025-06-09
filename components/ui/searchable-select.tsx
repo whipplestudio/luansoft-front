@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import type React from "react"
+import { useState, useEffect, useRef } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,6 +55,7 @@ export function SearchableSelect({
   const [searchQuery, setSearchQuery] = useState(searchValue || "")
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (onSearchChange) onSearchChange(searchQuery)
@@ -66,13 +67,11 @@ export function SearchableSelect({
 
   const filteredOptions = onSearchChange
     ? options
-    : options.filter(opt =>
-        opt.label.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    : options.filter((opt) => opt.label.toLowerCase().includes(searchQuery.toLowerCase()))
 
   const handleMultiSelectionChange = (value: string) => {
     const sel = selected as string[]
-    if (sel.includes(value)) onChange(sel.filter(v => v !== value))
+    if (sel.includes(value)) onChange(sel.filter((v) => v !== value))
     else onChange([...sel, value])
   }
 
@@ -83,7 +82,7 @@ export function SearchableSelect({
   }
 
   const handleSelectAll = () => {
-    const all = filteredOptions.filter(o => !o.disabled).map(o => o.value)
+    const all = filteredOptions.filter((o) => !o.disabled).map((o) => o.value)
     onChange(all)
   }
 
@@ -98,7 +97,7 @@ export function SearchableSelect({
       return sel.length > 0 ? `${sel.length} seleccionados` : placeholder
     } else {
       if (!selected) return placeholder
-      const opt = options.find(o => o.value === selected)
+      const opt = options.find((o) => o.value === selected)
       return opt ? opt.label : placeholder
     }
   }
@@ -106,11 +105,7 @@ export function SearchableSelect({
   // close on outside click
   useEffect(() => {
     const onOutside = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node) &&
-        isOpen
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) && isOpen) {
         setIsOpen(false)
         setSearchQuery("")
       }
@@ -124,9 +119,7 @@ export function SearchableSelect({
       <div className="relative">
         <Select disabled={isDisabled}>
           <SelectTrigger className="w-full">
-            <SelectValue placeholder={placeholder}>
-              {getDisplayValue()}
-            </SelectValue>
+            <SelectValue placeholder={placeholder}>{getDisplayValue()}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {showSearch && (
@@ -136,7 +129,7 @@ export function SearchableSelect({
                   <Input
                     placeholder={searchPlaceholder}
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-8 h-8 text-sm"
                   />
                 </div>
@@ -144,22 +137,13 @@ export function SearchableSelect({
             )}
 
             {isDisabled ? (
-              <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                {disabledMessage}
-              </div>
+              <div className="px-2 py-4 text-center text-sm text-muted-foreground">{disabledMessage}</div>
             ) : filteredOptions.length === 0 ? (
-              <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                {noResultsMessage}
-              </div>
+              <div className="px-2 py-4 text-center text-sm text-muted-foreground">{noResultsMessage}</div>
             ) : (
-              <div
-                className="overflow-y-auto"
-                style={{ maxHeight: `${maxHeight}px` }}
-              >
-                {filteredOptions.map(option => {
-                  const isChecked =
-                    Array.isArray(selected) &&
-                    (selected as string[]).includes(option.value)
+              <div className="overflow-y-auto" style={{ maxHeight: `${maxHeight}px` }}>
+                {filteredOptions.map((option) => {
+                  const isChecked = Array.isArray(selected) && (selected as string[]).includes(option.value)
 
                   return (
                     <div
@@ -167,28 +151,19 @@ export function SearchableSelect({
                       className={`group flex items-center px-2 py-1.5 cursor-pointer hover:bg-accent ${
                         option.disabled ? "opacity-50 cursor-not-allowed" : ""
                       }`}
-                      onClick={() =>
-                        !option.disabled &&
-                        handleMultiSelectionChange(option.value)
-                      }
+                      onClick={() => !option.disabled && handleMultiSelectionChange(option.value)}
                     >
                       <Checkbox
                         checked={isChecked}
-                        onCheckedChange={() =>
-                          handleMultiSelectionChange(option.value)
-                        }
-                        onClick={e => e.stopPropagation()}
+                        onCheckedChange={() => handleMultiSelectionChange(option.value)}
+                        onClick={(e) => e.stopPropagation()}
                         className="mr-2 h-4 w-4"
                         disabled={option.disabled}
                       />
 
-                      <span className="flex-grow bg-transparent group-hover:text-white">
-                        {option.label}
-                      </span>
+                      <span className="flex-grow bg-transparent group-hover:text-white">{option.label}</span>
                       {option.description && (
-                        <p className="text-xs text-muted-foreground group-hover:text-gray-200">
-                          {option.description}
-                        </p>
+                        <p className="text-xs text-muted-foreground group-hover:text-gray-200">{option.description}</p>
                       )}
                     </div>
                   )
@@ -198,12 +173,7 @@ export function SearchableSelect({
 
             {(selected as string[]).length > 0 && (
               <div className="border-t px-2 py-2 mt-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-xs"
-                  onClick={handleClearSelection}
-                >
+                <Button variant="ghost" size="sm" className="w-full text-xs" onClick={handleClearSelection}>
                   {clearButtonText}
                 </Button>
               </div>
@@ -211,12 +181,7 @@ export function SearchableSelect({
 
             {filteredOptions.length > 1 && (
               <div className="border-t px-2 py-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-xs"
-                  onClick={handleSelectAll}
-                >
+                <Button variant="ghost" size="sm" className="w-full text-xs" onClick={handleSelectAll}>
                   {selectAllButtonText}
                 </Button>
               </div>
@@ -226,16 +191,13 @@ export function SearchableSelect({
 
         {(selected as string[]).length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {(selected as string[]).map(value => {
-              const opt = options.find(o => o.value === value)
+            {(selected as string[]).map((value) => {
+              const opt = options.find((o) => o.value === value)
               return (
                 opt && (
                   <Badge key={value} variant="secondary" className="text-xs">
                     {opt.label}
-                    <button
-                      className="ml-1 text-xs"
-                      onClick={() => handleMultiSelectionChange(value)}
-                    >
+                    <button className="ml-1 text-xs" onClick={() => handleMultiSelectionChange(value)}>
                       ×
                     </button>
                   </Badge>
@@ -252,7 +214,7 @@ export function SearchableSelect({
         <div
           className={cn(
             "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-            isOpen && "ring-2 ring-ring ring-offset-2"
+            isOpen && "ring-2 ring-ring ring-offset-2",
           )}
           onClick={() => {
             if (!isDisabled) {
@@ -280,85 +242,71 @@ export function SearchableSelect({
         </div>
 
         {isOpen && (
-          <SelectContent asChild>
-            <div className="absolute z-50 w-full min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-80 mt-1">
-              {showSearch && (
-                <div className="px-2 py-2 sticky top-0 bg-background z-10 border-b">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      ref={searchInputRef}
-                      placeholder={searchPlaceholder}
-                      value={searchQuery}
-                      onChange={e => {
-                        e.stopPropagation()
-                        setSearchQuery(e.target.value)
-                      }}
-                      onClick={e => e.stopPropagation()}
-                      className="pl-8 h-8 text-sm"
-                      autoFocus
-                    />
-                  </div>
+          <div className="absolute z-50 w-full min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md animate-in fade-in-80 mt-1">
+            {showSearch && (
+              <div className="px-2 py-2 sticky top-0 bg-background z-10 border-b">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    placeholder={searchPlaceholder}
+                    value={searchQuery}
+                    onChange={(e) => {
+                      e.stopPropagation()
+                      setSearchQuery(e.target.value)
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="pl-8 h-8 text-sm"
+                    autoFocus
+                  />
                 </div>
-              )}
+              </div>
+            )}
 
-              {isDisabled ? (
-                <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                  {disabledMessage}
-                </div>
-              ) : filteredOptions.length === 0 ? (
-                <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                  {noResultsMessage}
-                </div>
-              ) : (
-                <div
-                  className="overflow-y-auto"
-                  style={{ maxHeight: `${maxHeight}px` }}
-                >
-                  {filteredOptions.map(option => (
-                    <div
-                      key={option.value}
-                      className={cn(
-                        "group relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                        option.value === selected ? "bg-accent" : "hover:bg-accent",
-                        option.disabled && "pointer-events-none opacity-50"
-                      )}
-                      onClick={() =>
-                        !option.disabled &&
-                        handleSingleSelectionChange(option.value)
-                      }
-                    >
-                      <div className="flex-grow bg-transparent group-hover:text-white">
-                        {option.label}
-                        {option.description && (
-                          <p className="text-xs text-muted-foreground group-hover:text-gray-200">
-                            {option.description}
-                          </p>
-                        )}
-                      </div>
-                      {option.value === selected && (
-                        <svg
-                          width="15"
-                          height="15"
-                          viewBox="0 0 15 15"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 ml-2"
-                        >
-                          <path
-                            d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L7.39799 11.092C7.29783 11.2452 7.13556 11.3467 6.95402 11.3699C6.77247 11.3931 6.58989 11.3355 6.45446 11.2124L3.70446 8.71241C3.44905 8.48022 3.43023 8.08494 3.66242 7.82953C3.89461 7.57412 4.28989 7.55529 4.5453 7.78749L6.75292 9.79441L10.6018 3.90792C10.7907 3.61902 11.178 3.53795 11.4669 3.72684Z"
-                            fill="currentColor"
-                            fillRule="evenodd"
-                            clipRule="evenodd"
-                          />
-                        </svg>
+            {isDisabled ? (
+              <div className="px-2 py-4 text-center text-sm text-muted-foreground">{disabledMessage}</div>
+            ) : filteredOptions.length === 0 ? (
+              <div className="px-2 py-4 text-center text-sm text-muted-foreground">{noResultsMessage}</div>
+            ) : (
+              <div className="overflow-y-auto" style={{ maxHeight: `${maxHeight}px` }}>
+                {filteredOptions.map((option) => (
+                  <div
+                    key={option.value}
+                    className={cn(
+                      "group relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                      option.value === selected ? "bg-accent" : "hover:bg-accent",
+                      option.disabled && "pointer-events-none opacity-50",
+                    )}
+                    onClick={() => !option.disabled && handleSingleSelectionChange(option.value)}
+                  >
+                    <div className="flex-grow bg-transparent group-hover:text-white">
+                      {option.label}
+                      {option.description && (
+                        <p className="text-xs text-muted-foreground group-hover:text-gray-200">{option.description}</p>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </SelectContent>
+                    {option.value === selected && (
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 15 15"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 ml-2"
+                      >
+                        <path
+                          d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L7.39799 11.092C7.29783 11.2452 7.13556 11.3467 6.95402 11.3699C6.77247 11.3931 6.58989 11.3355 6.45446 11.2124L3.70446 8.71241C3.44905 8.48022 3.43023 8.08494 3.66242 7.82953C3.89461 7.57412 4.28989 7.55529 4.5453 7.78749L6.75292 9.79441L10.6018 3.90792C10.7907 3.61902 11.178 3.53795 11.4669 3.72684Z"
+                          fill="currentColor"
+                          fillRule="evenodd"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     )
