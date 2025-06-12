@@ -132,7 +132,7 @@ export function AssignProcessForm({
     if (selectedProcessId) {
       const process = processes.find((p) => p.id === selectedProcessId)
       if (process) {
-        const isPayroll = process.name.toLowerCase() === "nómina" || process.name.toLowerCase() === "nomina"
+        const isPayroll = process.name.toLowerCase() === "pago nómina" || process.name.toLowerCase() === "pago nomina"
         setIsPayrollProcess(isPayroll)
 
         // Resetear los campos según el tipo de proceso

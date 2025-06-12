@@ -529,7 +529,7 @@ export default function AsignarProcesosPage() {
 
     // Verificar si es un proceso de nómina (exactamente "nómina" o "nomina")
     const processName = assignment.process.name.toLowerCase().trim()
-    const isPayroll = processName === "nómina" || processName === "nomina"
+    const isPayroll = processName === "pago nómina" || processName === "pago nomina"
 
     if (isPayroll) {
       // Si es nómina, establecer las frecuencias
@@ -569,7 +569,7 @@ export default function AsignarProcesosPage() {
 
       // Verificar si es un proceso de nómina (exactamente "nómina" o "nomina")
       const processName = assignmentToEdit.process.name.toLowerCase().trim()
-      const isPayroll = processName === "nómina" || processName === "nomina"
+      const isPayroll = processName === "pago nómina" || processName === "pago nomina"
 
       // Preparar los datos según el tipo de proceso
       let requestData
@@ -1125,8 +1125,8 @@ export default function AsignarProcesosPage() {
                   </div>
 
                   {/* Verificar si es un proceso de nómina */}
-                  {assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
-                  assignmentToEdit?.process.name.toLowerCase().trim() === "nomina" ? (
+                  {assignmentToEdit?.process.name.toLowerCase().trim() === "pago nómina" ||
+                  assignmentToEdit?.process.name.toLowerCase().trim() === "pago nomina" ? (
                     // Mostrar opciones de frecuencia para procesos de nómina
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label className="text-right">Frecuencia:</Label>
@@ -1255,8 +1255,8 @@ export default function AsignarProcesosPage() {
                 onClick={handleUpdateCommitmentDate}
                 disabled={
                   isUpdating ||
-                  (assignmentToEdit?.process.name.toLowerCase().trim() === "nómina" ||
-                  assignmentToEdit?.process.name.toLowerCase().trim() === "nomina"
+                  (assignmentToEdit?.process.name.toLowerCase().trim() === "pago nómina" ||
+                  assignmentToEdit?.process.name.toLowerCase().trim() === "pago nomina"
                     ? newPayrollFrequencies.length === 0
                     : !newCommitmentDate)
                 }
