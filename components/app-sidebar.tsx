@@ -67,7 +67,7 @@ const sidebarItems = [
     resource: "asignacion-contadores" as ResourceType,
   },
   {
-    title: "Asignacin de Contactos",
+    title: "Asignación de Contactos",
     url: "/asignacion-contactos",
     icon: UserPlus,
     resource: "asignacion-contactos" as ResourceType,
