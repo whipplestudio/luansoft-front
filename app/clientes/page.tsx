@@ -96,12 +96,6 @@ export default function ClientesPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
   const [userRole, setUserRole] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
-
-  useEffect(() => {
-    const role = localStorage.getItem("userRole")
-    setUserRole(role)
-  }, [])
-
   const [clients, setClients] = useState<Client[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -117,85 +111,6 @@ export default function ClientesPage() {
   })
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-
-  const handleEdit = (client: Client) => {
-    setSelectedClient(client)
-    setIsEditDialogOpen(true)
-  }
-
-  const handleDelete = (client: Client) => {
-    setSelectedClient(client)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleViewDetails = (client: Client) => {
-    setSelectedClient(client)
-    setIsDetailModalOpen(true)
-  }
-
-  const columns: ColumnDef<Client>[] = [
-    {
-      accessorKey: "company",
-      header: "Empresa",
-    },
-    {
-      accessorKey: "type",
-      header: "Tipo",
-      cell: ({ row }) => {
-        const type = row.getValue("type") as string
-        return <div className="capitalize">{type === "FISICA" ? "Persona Física" : "Persona Moral"}</div>
-      },
-    },
-    {
-      accessorKey: "regimenFiscal.nombre",
-      header: "Regimen fiscal",
-    },
-    {
-      accessorKey: "status",
-      header: "Estado",
-      cell: ({ row }) => {
-        const status = row.getValue("status") as string
-        return (
-          <div className={`capitalize ${status === "ACTIVE" ? "text-green-600" : "text-red-600"}`}>
-            {status === "ACTIVE" ? "Activo" : "Inactivo"}
-          </div>
-        )
-      },
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const client = row.original
-        const role = userRole as RoleType | null
-        const canEdit = hasPermission(role, "clientes", "edit")
-        const canDelete = hasPermission(role, "clientes", "delete")
-
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Abrir menú</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => handleViewDetails(client)}>Ver detalle</DropdownMenuItem>
-              {canEdit && <DropdownMenuItem onClick={() => handleEdit(client)}>Editar</DropdownMenuItem>}
-              <DropdownMenuSeparator />
-              {canDelete && client.status === "ACTIVE" && (
-                <DropdownMenuItem onClick={() => handleDelete(client)} className="text-red-600">
-                  Eliminar
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      },
-    },
-  ]
-
-  // Actualizar la función fetchClients para mapear correctamente los datos y enviar contadorId
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [contactos, setContactos] = useState<any[]>([])
@@ -237,8 +152,8 @@ export default function ClientesPage() {
         }
 
         // Añadir contadorId si el usuario es un contador
-        const userRole = localStorage.getItem("userRole")
-        if (userRole === "contador") {
+        const role = localStorage.getItem("userRole")
+        if (role === "contador") {
           const userData = localStorage.getItem("user")
           if (userData) {
             const user = JSON.parse(userData)
@@ -255,20 +170,10 @@ export default function ClientesPage() {
           setTotalPages(response.data.data.totalPages)
           setTotalItems(response.data.data.total)
         } else {
-          console.error("Error en la respuesta de la API:", response.data.message)
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los clientes",
-            variant: "destructive",
-          })
+          toast.error("No se pudieron cargar los clientes")
         }
       } catch (error) {
-        console.error("Error al obtener clientes:", error)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los clientes",
-          variant: "destructive",
-        })
+        toast.error("No se pudieron cargar los clientes")
       } finally {
         setIsLoading(false)
       }
@@ -342,14 +247,133 @@ export default function ClientesPage() {
     }
   }
 
+  const handleActivate = async (client: Client) => {
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No se encontró el token de autenticación")
+      }
+
+      const response = await axiosInstance.patch(
+        `/client/${client.id}/activate`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+
+      if (response.data.success) {
+        toast.success("Cliente activado exitosamente")
+        fetchClients()
+      } else {
+        throw new Error(response.data.message || "Error al activar el cliente")
+      }
+    } catch (error) {
+      console.error("Error al activar el cliente:", error)
+      if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
+        toast.error("Cliente no encontrado")
+      } else {
+        toast.error("Error al activar el cliente")
+      }
+    }
+  }
+
+  const handleEdit = (client: Client) => {
+    setSelectedClient(client)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleDelete = (client: Client) => {
+    setSelectedClient(client)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleViewDetails = (client: Client) => {
+    setSelectedClient(client)
+    setIsDetailModalOpen(true)
+  }
+
+  const columns: ColumnDef<Client>[] = [
+    {
+      accessorKey: "company",
+      header: "Empresa",
+    },
+    {
+      accessorKey: "type",
+      header: "Tipo",
+      cell: ({ row }) => {
+        const type = row.getValue("type") as string
+        return <div className="capitalize">{type === "FISICA" ? "Persona Física" : "Persona Moral"}</div>
+      },
+    },
+    {
+      accessorKey: "regimenFiscal.nombre",
+      header: "Regimen fiscal",
+    },
+    {
+      accessorKey: "status",
+      header: "Estado",
+      cell: ({ row }) => {
+        const status = row.getValue("status") as string
+        return (
+          <div className={`capitalize ${status === "ACTIVE" ? "text-green-600" : "text-red-600"}`}>
+            {status === "ACTIVE" ? "Activo" : "Inactivo"}
+          </div>
+        )
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const client = row.original
+        const role = userRole as RoleType | null
+        const canEdit = hasPermission(role, "clientes", "edit")
+        const canDelete = hasPermission(role, "clientes", "delete")
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Abrir menú</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => handleViewDetails(client)}>Ver detalle</DropdownMenuItem>
+              {canEdit && <DropdownMenuItem onClick={() => handleEdit(client)}>Editar</DropdownMenuItem>}
+              <DropdownMenuSeparator />
+              {canDelete && client.status === "ACTIVE" && (
+                <DropdownMenuItem onClick={() => handleDelete(client)} className="text-red-600">
+                  Eliminar
+                </DropdownMenuItem>
+              )}
+              {canEdit && client.status === "INACTIVE" && (
+                <DropdownMenuItem onClick={() => handleActivate(client)} className="text-green-600">
+                  Activar
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+  ]
+
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
   return (
     <ProtectedRoute resource="clientes" action="view" redirectTo="/">
       <div className="container mx-auto py-10">
-        <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Clientes</h1>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={toggleSortOrder} className="flex items-center gap-1">
+            <Button variant="outline" onClick={toggleSortOrder} className="flex items-center gap-1 bg-transparent">
               {sortOrder === "asc" ? (
                 <>
                   <ArrowUp className="h-4 w-4" />

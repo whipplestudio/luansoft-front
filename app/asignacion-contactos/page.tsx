@@ -286,7 +286,6 @@ export default function AsignacionContactosPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <Toaster />
       <h1 className="text-2xl font-bold mb-6">Asignación de Clientes a Contactos</h1>
       <div className="mb-6">
         <Label htmlFor="contacto-select">Seleccionar Contacto</Label>

@@ -268,7 +268,6 @@ export default function UsuariosPage() {
   return (
     <ProtectedRoute resource="usuarios" action="view" redirectTo="/">
       <div className="container mx-auto py-10">
-        <Toaster />
         <div className="flex justify-between items-center mb-5">
           <h1 className="text-2xl font-bold">Usuarios</h1>
           <div className="flex gap-2">

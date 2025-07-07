@@ -660,7 +660,6 @@ export default function HistoricoProcesosPage() {
   return (
     <ProtectedRoute resource="historico-procesos" action="view" redirectTo="/">
       <div className="container mx-auto py-6">
-        <Toaster />
 
         {currentDocument && (
           <DocumentViewerModal

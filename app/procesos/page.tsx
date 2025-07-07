@@ -355,7 +355,6 @@ export default function ProcesosPage() {
   return (
     <ProtectedRoute resource="procesos" action="view" redirectTo="/">
       <div className="container mx-auto py-10">
-        <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Catálogo de Procesos</h1>
           <div className="flex items-center gap-2">

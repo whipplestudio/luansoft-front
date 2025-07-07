@@ -3,6 +3,7 @@ import ClientLayout from "./clientLayout"
 import "./globals.css" // Make sure this import is present
 // Importar los estilos del visor de PDF
 import "./pdf-viewer.css"
+import { Toaster } from "sonner"
 
 export const metadata = {
   title: "Luenser CMS Fiscal",
@@ -24,5 +25,10 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  return <ClientLayout>{children}</ClientLayout>
+  return (
+    <ClientLayout>
+      <Toaster position="top-center" />
+      {children}
+    </ClientLayout>
+  )
 }
