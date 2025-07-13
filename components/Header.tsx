@@ -88,7 +88,7 @@ export function Header({ userRole }: { userRole: string | null }) {
           <DropdownMenuTrigger asChild>
             <Avatar className="cursor-pointer">
               <AvatarFallback className="bg-primary-green text-white">
-                {user.name
+                {user?.name && user?.name
                   .split(" ")
                   .map((name) => name.charAt(0))
                   .join("")

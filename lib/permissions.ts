@@ -49,7 +49,7 @@ const PERMISSIONS: Record<RoleType, RolePermissions> = {
     clientes: { view: true, create: true, edit: true, delete: true },
     contactos: { view: false, create: false, edit: false, delete: false },
     "asignacion-contadores": { view: true, create: false, edit: false, delete: false },
-    "asignacion-contactos": { view: false, create: false, edit: false, delete: false },
+    "asignacion-contactos": { view: true, create: true, edit: true, delete: true },
     procesos: { view: true, create: false, edit: false, delete: false },
     "regimenes-fiscales": { view: true, create: false, edit: false, delete: false },
     "asignar-procesos": { view: true, create: true, edit: true, delete: true },

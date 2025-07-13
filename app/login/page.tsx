@@ -136,7 +136,6 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-light-gray">
-      <Toaster position="top-center" />
       <Card className="w-full max-w-md border-primary-green/20 shadow-lg">
         <CardHeader className="bg-primary-green text-white rounded-t-lg">
           <div className="flex justify-center mb-4">

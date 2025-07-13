@@ -6,7 +6,7 @@ import { MoreHorizontal, PlusCircle, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import { DialogCreateClient } from "@/components/DialogCreateClient"
-import { toast, Toaster } from "sonner"
+import { toast } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,13 +96,6 @@ export default function ClientesPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
   const [userRole, setUserRole] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
-
-  useEffect(() => {
-    const role = localStorage.getItem("userRole")
-    setUserRole(role)
-  }, [])
-
-  const [clients, setClients] = useState<Client[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -117,6 +110,175 @@ export default function ClientesPage() {
   })
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  const [contactos, setContactos] = useState<any[]>([])
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
+
+  interface ContactosResponse {
+    success: boolean
+    data: {
+      data: any[]
+      total: number
+      page: number
+      limit: number
+      totalPages: number
+    }
+  }
+
+  // Función para alternar el orden de clasificación
+  const toggleSortOrder = () => {
+    const newOrder = sortOrder === "asc" ? "desc" : "asc"
+    setSortOrder(newOrder)
+    fetchClients(undefined, undefined, undefined, newOrder)
+  }
+
+  // Buscar la función fetchClientes y modificarla para incluir el contadorId cuando el usuario es un contador
+  const fetchClients = useCallback(
+    async (search?: string, page?: number, limit?: number, order?: "asc" | "desc") => {
+      setIsLoading(true)
+      try {
+        const params = new URLSearchParams()
+        params.append("page", (page || currentPage).toString())
+        params.append("limit", (limit || pageSize).toString())
+        params.append("order", order || sortOrder)
+
+        // Añadir filtro si existe
+        const filterTerm = search !== undefined ? search : searchTerm
+        if (filterTerm.trim()) {
+          params.append("filter", filterTerm)
+        }
+
+        // Añadir contadorId si el usuario es un contador
+        const role = localStorage.getItem("userRole")
+        if (role === "contador") {
+          const userData = localStorage.getItem("user")
+          if (userData) {
+            const user = JSON.parse(userData)
+            if (user.contadorId) {
+              params.append("contadorId", user.contadorId)
+            }
+          }
+        }
+
+        const response = await axiosInstance.get<ContactosResponse>(`/client?${params.toString()}`)
+
+        if (response.data.success) {
+          setContactos(response.data.data.data)
+          setTotalPages(response.data.data.totalPages)
+          setTotalItems(response.data.data.total)
+        } else {
+          toast.error("No se pudieron cargar los clientes")
+        }
+      } catch (error) {
+        toast.error("No se pudieron cargar los clientes")
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [currentPage, pageSize, searchTerm, sortOrder],
+  )
+
+  // Debounce para la búsqueda
+  const debouncedSearch = useCallback(
+    debounce((value: string) => {
+      fetchClients(value)
+    }, 500),
+    [currentPage, pageSize, sortOrder],
+  )
+
+  // Manejar cambio en el término de búsqueda
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1) // Resetear a la primera página al buscar
+    debouncedSearch(value)
+  }
+
+  // Manejar cambio de página
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  // Manejar cambio en el número de filas por página
+  const handleLimitChange = (limit: number) => {
+    setPageSize(limit)
+    setCurrentPage(1)
+  }
+
+  // Cargar los clientes al montar el componente
+  useEffect(() => {
+    fetchClients()
+  }, [currentPage, pageSize, sortOrder])
+
+  const confirmDelete = async () => {
+    if (selectedClient) {
+      setIsDeleting(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        if (!token) {
+          throw new Error("No se encontró el token de autenticación")
+        }
+
+        const response = await axiosInstance.delete(`/client/${selectedClient.id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.data.success) {
+          toast.success("Cliente eliminado exitosamente")
+          setIsDeleteDialogOpen(false)
+          fetchClients()
+        } else {
+          throw new Error(response.data.message || "Error al eliminar el cliente")
+        }
+      } catch (error) {
+        console.error("Error al eliminar el cliente:", error)
+        if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
+          toast.error("Cliente no encontrado")
+        } else {
+          toast.error("Error al eliminar el cliente")
+        }
+      } finally {
+        setIsDeleting(false)
+        setSelectedClient(null)
+      }
+    }
+  }
+
+  const handleActivate = async (client: Client) => {
+    try {
+      const token = localStorage.getItem("accessToken")
+      if (!token) {
+        throw new Error("No se encontró el token de autenticación")
+      }
+
+      const response = await axiosInstance.patch(
+        `/client/${client.id}/activate`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      )
+
+      if (response.data.success) {
+        toast.success("Cliente activado exitosamente")
+        fetchClients()
+      } else {
+        throw new Error(response.data.message || "Error al activar el cliente")
+      }
+    } catch (error) {
+      console.error("Error al activar el cliente:", error)
+      if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
+        toast.error("Cliente no encontrado")
+      } else {
+        toast.error("Error al activar el cliente")
+      }
+    }
+  }
 
   const handleEdit = (client: Client) => {
     setSelectedClient(client)
@@ -188,6 +350,11 @@ export default function ClientesPage() {
                   Eliminar
                 </DropdownMenuItem>
               )}
+              {canEdit && client.status === "INACTIVE" && (
+                <DropdownMenuItem onClick={() => handleActivate(client)} className="text-green-600">
+                  Activar
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -195,161 +362,18 @@ export default function ClientesPage() {
     },
   ]
 
-  // Actualizar la función fetchClients para mapear correctamente los datos y enviar contadorId
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [contactos, setContactos] = useState<any[]>([])
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalItems, setTotalItems] = useState(0)
-
-  interface ContactosResponse {
-    success: boolean
-    data: {
-      data: any[]
-      total: number
-      page: number
-      limit: number
-      totalPages: number
-    }
-  }
-
-  // Función para alternar el orden de clasificación
-  const toggleSortOrder = () => {
-    const newOrder = sortOrder === "asc" ? "desc" : "asc"
-    setSortOrder(newOrder)
-    fetchClients(undefined, undefined, undefined, newOrder)
-  }
-
-  // Buscar la función fetchClientes y modificarla para incluir el contadorId cuando el usuario es un contador
-  const fetchClients = useCallback(
-    async (search?: string, page?: number, limit?: number, order?: "asc" | "desc") => {
-      setIsLoading(true)
-      try {
-        const params = new URLSearchParams()
-        params.append("page", (page || currentPage).toString())
-        params.append("limit", (limit || pageSize).toString())
-        params.append("order", order || sortOrder)
-
-        // Añadir filtro si existe
-        const filterTerm = search !== undefined ? search : searchTerm
-        if (filterTerm.trim()) {
-          params.append("filter", filterTerm)
-        }
-
-        // Añadir contadorId si el usuario es un contador
-        const userRole = localStorage.getItem("userRole")
-        if (userRole === "contador") {
-          const userData = localStorage.getItem("user")
-          if (userData) {
-            const user = JSON.parse(userData)
-            if (user.contadorId) {
-              params.append("contadorId", user.contadorId)
-            }
-          }
-        }
-
-        const response = await axiosInstance.get<ContactosResponse>(`/client?${params.toString()}`)
-
-        if (response.data.success) {
-          setContactos(response.data.data.data)
-          setTotalPages(response.data.data.totalPages)
-          setTotalItems(response.data.data.total)
-        } else {
-          console.error("Error en la respuesta de la API:", response.data.message)
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los clientes",
-            variant: "destructive",
-          })
-        }
-      } catch (error) {
-        console.error("Error al obtener clientes:", error)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los clientes",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [currentPage, pageSize, searchTerm, sortOrder],
-  )
-
-  // Debounce para la búsqueda
-  const debouncedSearch = useCallback(
-    debounce((value: string) => {
-      fetchClients(value)
-    }, 3000),
-    [fetchClients],
-  )
-
-  // Manejar cambio en el término de búsqueda
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value)
-    debouncedSearch(value)
-  }
-
-  // Manejar cambio de página
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-  }
-
-  // Manejar cambio en el número de filas por página
-  const handleLimitChange = (limit: number) => {
-    setPageSize(limit)
-    setCurrentPage(1)
-  }
-
-  // Cargar los clientes al montar el componente
   useEffect(() => {
-    fetchClients()
-  }, [fetchClients])
-
-  const confirmDelete = async () => {
-    if (selectedClient) {
-      setIsDeleting(true)
-      try {
-        const token = localStorage.getItem("accessToken")
-        if (!token) {
-          throw new Error("No se encontró el token de autenticación")
-        }
-
-        const response = await axiosInstance.delete(`/client/${selectedClient.id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.data.success) {
-          toast.success("Cliente eliminado exitosamente")
-          setIsDeleteDialogOpen(false)
-          fetchClients()
-        } else {
-          throw new Error(response.data.message || "Error al eliminar el cliente")
-        }
-      } catch (error) {
-        console.error("Error al eliminar el cliente:", error)
-        if (axios.isAxiosError(error) && error.response && error.response.status === 404) {
-          toast.error("Cliente no encontrado")
-        } else {
-          toast.error("Error al eliminar el cliente")
-        }
-      } finally {
-        setIsDeleting(false)
-        setSelectedClient(null)
-      }
-    }
-  }
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
 
   return (
     <ProtectedRoute resource="clientes" action="view" redirectTo="/">
       <div className="container mx-auto py-10">
-        <Toaster />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Clientes</h1>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={toggleSortOrder} className="flex items-center gap-1">
+            <Button variant="outline" onClick={toggleSortOrder} className="flex items-center gap-1 bg-transparent">
               {sortOrder === "asc" ? (
                 <>
                   <ArrowUp className="h-4 w-4" />

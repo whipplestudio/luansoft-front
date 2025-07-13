@@ -136,7 +136,6 @@ export default function ClienteHistorialPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <Toaster />
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Historial de {client.name}</h1>
         <Button variant="outline" onClick={() => router.back()}>

@@ -325,7 +325,6 @@ export default function AsignacionContadoresPage() {
   return (
     <ProtectedRoute resource="asignacion-contadores" action="view" redirectTo="/">
       <div className="container mx-auto py-10">
-        <Toaster />
         <h1 className="text-2xl font-bold mb-6">Asignación de Contadores</h1>
         {/* Mostrar el selector de contador solo si el usuario no es un contador */}
         {localStorage.getItem("userRole") !== "contador" ? (
