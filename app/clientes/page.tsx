@@ -6,7 +6,7 @@ import { MoreHorizontal, PlusCircle, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import { DialogCreateClient } from "@/components/DialogCreateClient"
-import { toast, Toaster } from "sonner"
+import { toast } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,7 +96,6 @@ export default function ClientesPage() {
   // Obtener el rol del usuario desde localStorage al cargar el componente
   const [userRole, setUserRole] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
-  const [clients, setClients] = useState<Client[]>([])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -185,13 +184,14 @@ export default function ClientesPage() {
   const debouncedSearch = useCallback(
     debounce((value: string) => {
       fetchClients(value)
-    }, 3000),
-    [fetchClients],
+    }, 500),
+    [currentPage, pageSize, sortOrder],
   )
 
   // Manejar cambio en el término de búsqueda
   const handleSearchChange = (value: string) => {
     setSearchTerm(value)
+    setCurrentPage(1) // Resetear a la primera página al buscar
     debouncedSearch(value)
   }
 
@@ -209,7 +209,7 @@ export default function ClientesPage() {
   // Cargar los clientes al montar el componente
   useEffect(() => {
     fetchClients()
-  }, [fetchClients])
+  }, [currentPage, pageSize, sortOrder])
 
   const confirmDelete = async () => {
     if (selectedClient) {
