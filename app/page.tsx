@@ -26,6 +26,8 @@ import { debounce } from "lodash"
 import { Logo } from "@/components/Logo"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
+import { ClientProcessesModal } from "@/components/ClientProcessesModal"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 const GRID_ITEMS_PER_PAGE = 100
 const DEFAULT_TABLE_ITEMS_PER_PAGE = 20
@@ -101,6 +103,40 @@ const mapDeliveryStatusToSemaphore = (status: string): SemaphoreStatus => {
 // Mapear el porcentaje de completitud a un número
 const parseCompletionPercentage = (percentage: string): number => {
   return Number.parseFloat(percentage.replace("%", ""))
+}
+
+// Función para determinar el estado del dot basado en los procesos del cliente
+const getDotStatus = (processes: Process[]) => {
+  if (!processes || processes.length === 0) {
+    return {
+      color: "bg-gray-500",
+      tooltip: "Sin datos",
+    }
+  }
+
+  const delayedCount = processes.filter((p) => p.deliveryStatus === "delayed").length
+  const onTimeAndCompletedCount = processes.filter(
+    (p) => p.deliveryStatus === "onTime" || p.deliveryStatus === "completed",
+  ).length
+
+  if (delayedCount > 0) {
+    return {
+      color: "bg-red-500",
+      tooltip: `Atrasado (${delayedCount})`,
+    }
+  }
+
+  if (onTimeAndCompletedCount > 0) {
+    return {
+      color: "bg-green-500",
+      tooltip: `En tiempo (${onTimeAndCompletedCount})`,
+    }
+  } 
+
+  return {
+    color: "bg-gray-500",
+    tooltip: "Sin datos",
+  }
 }
 
 // Component for the airport-style infinite scroll display
@@ -190,6 +226,7 @@ const InfiniteScrollDisplay = ({
   // const [timer, setTimer] = useState<NodeJS.Timeout | null>(null)
 
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null)
+  const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null
@@ -206,6 +243,7 @@ const InfiniteScrollDisplay = ({
           setIsVisible(true)
         }, 500) // This should match the CSS transition duration
       }, BULK_DISPLAY_TIME)
+      setIntervalId(intervalId)
     }
 
     startInterval()
@@ -254,9 +292,18 @@ const InfiniteScrollDisplay = ({
               <div className="text-sm font-semibold truncate">{item.company}</div>
               <div className="text-xs text-gray-500 truncate">{item.client}</div>
               <div className="flex items-center mt-1">
-                <div
-                  className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
-                ></div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={`h-2 w-2 rounded-full mr-1 ${getDotStatus(item.processes).color} cursor-help`}
+                      ></div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{getDotStatus(item.processes).tooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <span className="text-xs">{item.progressPercentage}%</span>
               </div>
               <div className="text-xs mt-1 text-gray-500">{item.responsible}</div>
@@ -339,6 +386,8 @@ export default function DashboardPage() {
   const [fileName, setFileName] = useState<string>("")
   const [fileId, setFileId] = useState<string>("")
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
+  const [isClientProcessesModalOpen, setIsClientProcessesModalOpen] = useState(false)
+  const [selectedClientForProcesses, setSelectedClientForProcesses] = useState<FiscalDeliverable | null>(null)
 
   // Función para obtener la URL de descarga de un archivo
   const getFileDownloadUrl = async (fileId: string): Promise<string | null> => {
@@ -425,6 +474,12 @@ export default function DashboardPage() {
     }
   }
 
+  // Función para abrir el modal de procesos del cliente
+  const handleOpenClientProcesses = (client: FiscalDeliverable) => {
+    setSelectedClientForProcesses(client)
+    setIsClientProcessesModalOpen(true)
+  }
+
   // Definir las columnas dentro del componente para tener acceso a handleOpenDocumentViewer
   const columns: ColumnDef<FiscalDeliverable>[] = [
     {
@@ -470,7 +525,8 @@ export default function DashboardPage() {
                 <Badge
                   key={index}
                   variant="outline"
-                  className={`text-xs cursor-pointer transition-colors hover:opacity-80 ${isCompleted
+                  className={`text-xs cursor-pointer transition-colors hover:opacity-80 ${
+                    isCompleted
                       ? "bg-green-100 text-green-800 border-green-300"
                       : process.deliveryStatus === "onTime"
                         ? "bg-green-100 text-green-800 border-green-300"
@@ -479,7 +535,7 @@ export default function DashboardPage() {
                           : process.deliveryStatus === "delayed"
                             ? "bg-red-100 text-red-800 border-red-300"
                             : "bg-gray-100 text-gray-800 border-gray-300"
-                    }`}
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation()
                     if (isCompleted && hasFile) {
@@ -796,10 +852,10 @@ export default function DashboardPage() {
   const clearFilters = () => {
     const emptyFilters = {
       companyName: "",
-      statuses: [],
-      contadorIds: [],
-      processIds: [],
-      contactoIds: [],
+      statuses: [] as string[],
+      contadorIds: [] as string[],
+      processIds: [] as string[],
+      contactoIds: [] as string[],
     }
 
     // Si el usuario es un contacto, mantener su ID en los filtros
@@ -888,9 +944,9 @@ export default function DashboardPage() {
 
       // Usar debounce para la llamada al backend
       clearTimeout((window as any).companyFilterTimeout)
-        ; (window as any).companyFilterTimeout = setTimeout(() => {
-          handleFilter("companyName", value)
-        }, 500)
+      ;(window as any).companyFilterTimeout = setTimeout(() => {
+        handleFilter("companyName", value)
+      }, 500)
     }
 
     // Actualizar el input local cuando cambia el filtro global
@@ -989,7 +1045,7 @@ export default function DashboardPage() {
             placeholder="Seleccionar procesos"
           />
         </div>
-        <Button onClick={clearFilters} variant="outline" className="w-full">
+        <Button onClick={clearFilters} variant="outline" className="w-full bg-transparent">
           Limpiar filtros
         </Button>
       </div>
@@ -1004,28 +1060,25 @@ export default function DashboardPage() {
   }
 
   const handleCardClick = (client: FiscalDeliverable) => {
-    setSelectedClient(client)
-    setIsDetailDialogOpen(true)
+    handleOpenClientProcesses(client)
   }
 
-  const handleViewModeChange = (newViewMode: "grid" | "table") => {
-    let newLimit: number
+  const handleViewModeChange = (newViewMode: string) => {
+    if (newViewMode === "grid" || newViewMode === "table") {
+      let newLimit: number;
 
-    if (newViewMode === "grid") {
-      // Vista cuadrícula: usar límite fijo de 100
-      newLimit = GRID_ITEMS_PER_PAGE
-    } else {
-      // Vista tabla: usar el límite guardado para tabla
-      newLimit = tableLimit
+      if (newViewMode === "grid") {
+        newLimit = GRID_ITEMS_PER_PAGE;
+      } else {
+        newLimit = tableLimit;
+      }
+
+      setViewMode(newViewMode as "grid" | "table");
+      setCurrentLimit(newLimit);
+      setCurrentPage(1);
+      fetchClients(1, newLimit, filters);
     }
-
-    setViewMode(newViewMode)
-    setCurrentLimit(newLimit)
-    setCurrentPage(1) // Resetear a la página 1
-
-    // Hacer nueva llamada con el límite correcto
-    fetchClients(1, newLimit, filters)
-  }
+  };
 
   // Buscar el useEffect que maneja el modo de pantalla completa (cerca de la línea 1000)
   // y reemplazarlo con este código mejorado:
@@ -1182,92 +1235,96 @@ export default function DashboardPage() {
           )}
           <div className="flex flex-wrap gap-2 items-center">
             {/* Clase común para todos los botones de la barra de herramientas */}
-            {
-              !isFullscreen && (
-                <>
-                  <Button
-                    variant="outline"
-                    className="h-10 px-4 flex items-center justify-center"
-                    onClick={() => {
-                      // Cerrar sesión eliminando datos de autenticación
-                      localStorage.removeItem("accessToken")
-                      localStorage.removeItem("refreshToken")
-                      localStorage.removeItem("user")
-                      localStorage.removeItem("isAuthenticated")
-                      localStorage.removeItem("userRole")
-                      // Redirigir a la página de login
-                      router.push("/login")
-                    }}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    <span className="whitespace-nowrap">Cerrar sesión</span>
-                  </Button>
-                  <Sheet>
-                    <SheetTrigger asChild>
-                      <Button variant="outline" className="h-10 w-10 flex items-center justify-center">
-                        <Filter className="h-4 w-4" />
-                        <span className="sr-only">Filtros</span>
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent>
-                      <SheetHeader>
-                        <SheetTitle>Filtros</SheetTitle>
-                        <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
-                      </SheetHeader>
-                      <div className="mt-4">
-                        <FilterContent />
-                      </div>
-                    </SheetContent>
-                  </Sheet>
-                  <Button onClick={toggleSortOrder} variant="outline" className="h-10 px-4 flex items-center justify-center">
-                    {sortCompany === "asc" ? (
-                      <>
-                        <ArrowUpDown className="mr-2 h-4 w-4" />
-                        <span className="whitespace-nowrap">A-Z</span>
-                      </>
-                    ) : (
-                      <>
-                        <ArrowUpDown className="mr-2 h-4 w-4 rotate-180" />
-                        <span className="whitespace-nowrap">Z-A</span>
-                      </>
-                    )}
-                  </Button>
-                </>
-              )
-            }
-            <Button onClick={toggleFullscreen} variant="outline" className="h-10 w-10 flex items-center justify-center">
+            {!isFullscreen && (
+              <>
+                <Button
+                  variant="outline"
+                  className="h-10 px-4 flex items-center justify-center bg-transparent"
+                  onClick={() => {
+                    // Cerrar sesión eliminando datos de autenticación
+                    localStorage.removeItem("accessToken")
+                    localStorage.removeItem("refreshToken")
+                    localStorage.removeItem("user")
+                    localStorage.removeItem("isAuthenticated")
+                    localStorage.removeItem("userRole")
+                    // Redirigir a la página de login
+                    router.push("/login")
+                  }}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  <span className="whitespace-nowrap">Cerrar sesión</span>
+                </Button>
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" className="h-10 w-10 flex items-center justify-center bg-transparent">
+                      <Filter className="h-4 w-4" />
+                      <span className="sr-only">Filtros</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent>
+                    <SheetHeader>
+                      <SheetTitle>Filtros</SheetTitle>
+                      <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-4">
+                      <FilterContent />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+                <Button
+                  onClick={toggleSortOrder}
+                  variant="outline"
+                  className="h-10 px-4 flex items-center justify-center bg-transparent"
+                >
+                  {sortCompany === "asc" ? (
+                    <>
+                      <ArrowUpDown className="mr-2 h-4 w-4" />
+                      <span className="whitespace-nowrap">A-Z</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUpDown className="mr-2 h-4 w-4 rotate-180" />
+                      <span className="whitespace-nowrap">Z-A</span>
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+            <Button
+              onClick={toggleFullscreen}
+              variant="outline"
+              className="h-10 w-10 flex items-center justify-center bg-transparent"
+            >
               {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
               <span className="sr-only">{isFullscreen ? "Salir de Pantalla Completa" : "Pantalla Completa"}</span>
             </Button>
-            {
-              !isFullscreen && (
-                <Select value={viewMode} onValueChange={handleViewModeChange}>
-                  <SelectTrigger className="h-10 w-auto whitespace-nowrap flex items-center justify-center">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="grid">
-                      <div className="flex items-center whitespace-nowrap">
-                        <Grid className="mr-2 h-4 w-4 flex-shrink-0" />
-                        <span className="hidden sm:inline">Cuadrícula</span>
-                        <span className="sm:hidden" title="Vista Cuadrícula">
-                          <Grid className="h-4 w-4" />
-                        </span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="table">
-                      <div className="flex items-center whitespace-nowrap">
-                        <List className="mr-2 h-4 w-4 flex-shrink-0" />
-                        <span className="hidden sm:inline">Tabla</span>
-                        <span className="sm:hidden" title="Vista Tabla">
-                          <List className="h-4 w-4" />
-                        </span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              )
-            }
+            {!isFullscreen && (
+              <Select value={viewMode} onValueChange={handleViewModeChange}>
+                <SelectTrigger className="h-10 w-auto whitespace-nowrap flex items-center justify-center">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="grid">
+                    <div className="flex items-center whitespace-nowrap">
+                      <Grid className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span className="hidden sm:inline">Cuadrícula</span>
+                      <span className="sm:hidden" title="Vista Cuadrícula">
+                        <Grid className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="table">
+                    <div className="flex items-center whitespace-nowrap">
+                      <List className="mr-2 h-4 w-4 flex-shrink-0" />
+                      <span className="hidden sm:inline">Tabla</span>
+                      <span className="sm:hidden" title="Vista Tabla">
+                        <List className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
 
@@ -1437,9 +1494,18 @@ export default function DashboardPage() {
                         <div className="text-sm font-semibold truncate">{item.company}</div>
                         <div className="text-xs text-gray-500 truncate">{item.client}</div>
                         <div className="flex items-center mt-1">
-                          <div
-                            className={`h-2 w-2 rounded-full mr-1 bg-${item.progressPercentage >= 66 ? "green" : item.progressPercentage >= 33 ? "yellow" : "red"}-500`}
-                          ></div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className={`h-2 w-2 rounded-full mr-1 ${getDotStatus(item.processes).color} cursor-help`}
+                                ></div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{getDotStatus(item.processes).tooltip}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           <span className="text-xs">{item.progressPercentage}%</span>
                         </div>
                         <div className="text-xs mt-1 text-gray-500">{item.responsible}</div>
@@ -1462,9 +1528,8 @@ export default function DashboardPage() {
                   data={clientsData}
                   onRowClick={handleCardClick}
                   pagination={{
-                    currentPage,
-                    totalPages,
-                    totalItems,
+                    page: currentPage,
+                    pageCount: totalPages,
                     onPageChange: handlePageChange,
                     perPage: tableLimit,
                     onPerPageChange: handlePerPageChange,
@@ -1498,11 +1563,23 @@ export default function DashboardPage() {
           title={documentTitle}
           fileName={fileName}
           onDownload={handleDownloadDocument}
-          isLoading={isLoadingDocument}
+        />
+
+        {/* Modal de procesos del cliente */}
+        <ClientProcessesModal
+          isOpen={isClientProcessesModalOpen}
+          onClose={() => setIsClientProcessesModalOpen(false)}
+          client={selectedClientForProcesses}
         />
       </>
     )
   }
 
-  return <div className={`w-full max-w-[2560px] mx-auto py-2 px-2 sm:py-4 sm:px-4 2xl:px-0 ${isFullscreen ? "fullscreen-mode" : ""}`}>{content}</div>
+  return (
+    <div
+      className={`w-full max-w-[2560px] mx-auto py-2 px-2 sm:py-4 sm:px-4 2xl:px-0 ${isFullscreen ? "fullscreen-mode" : ""}`}
+    >
+      {content}
+    </div>
+  )
 }
