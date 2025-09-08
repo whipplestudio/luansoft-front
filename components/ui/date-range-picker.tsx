@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Badge } from "@/components/ui/badge"
 
 interface DateRangePickerProps {
   value?: DateRange
@@ -95,12 +94,6 @@ export function DateRangePicker({
   const handlePresetSelect = (preset: (typeof presets)[0]) => {
     const range = preset.getValue()
     setTempRange(range)
-    setError("")
-  }
-
-  const handleClearRange = () => {
-    setTempRange(undefined)
-    onChange?.(undefined)
     setError("")
   }
 
@@ -183,16 +176,6 @@ export function DateRangePicker({
           </div>
         </PopoverContent>
       </Popover>
-
-      {/* Active range chip */}
-      {value?.from && (
-        <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-          {formatDateRange(value)}
-          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-transparent" onClick={handleClearRange}>
-            <X className="h-3 w-3" />
-          </Button>
-        </Badge>
-      )}
     </div>
   )
 }

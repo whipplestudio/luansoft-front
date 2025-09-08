@@ -3,13 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react"
 import { axiosInstance } from "@/lib/axios"
 import { toast } from "sonner"
-import {
-  flattenProcessHistory,
-  groupDocumentsByProcess,
-  groupDocumentsByMonth,
-  sortDocuments,
-  type ProcessHistoryItem,
-} from "@/utils/processHistoryUtils"
+import { flattenProcessHistory, sortDocuments, type ProcessHistoryItem } from "@/utils/processHistoryUtils"
 
 interface DocumentExplorerFilters {
   search: string
@@ -20,10 +14,7 @@ interface DocumentExplorerFilters {
 }
 
 interface DocumentExplorerState {
-  groupBy: "process" | "month"
   viewMode: "cards" | "table"
-  sortBy: string
-  sortOrder: "asc" | "desc"
   page: number
   limit: number
 }
@@ -41,7 +32,7 @@ interface ProcessHistoryResponse {
   }
 }
 
-export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?: string) {
+export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?: string, isEnabled = false) {
   // State management
   const [filters, setFilters] = useState<DocumentExplorerFilters>({
     search: "",
@@ -52,10 +43,7 @@ export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?
   })
 
   const [state, setState] = useState<DocumentExplorerState>({
-    groupBy: "process",
     viewMode: "cards",
-    sortBy: "originalDate",
-    sortOrder: "desc",
     page: 1,
     limit: 50,
   })
@@ -65,9 +53,13 @@ export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  // Fetch process history data
+  // Fixed sorting - always use dateCompleted DESC
+  const FIXED_SORT_BY = "dateCompleted"
+  const FIXED_SORT_ORDER = "desc"
+
+  // Manual fetch function
   const fetchData = useCallback(async () => {
-    if (!clientId) return
+    if (!clientId || !isEnabled) return
 
     setIsLoading(true)
     setError(null)
@@ -76,8 +68,8 @@ export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?
       const params = new URLSearchParams({
         page: state.page.toString(),
         limit: state.limit.toString(),
-        sortBy: state.sortBy,
-        sortOrder: state.sortOrder,
+        sortBy: FIXED_SORT_BY,
+        sortOrder: FIXED_SORT_ORDER,
       })
 
       if (clientId) params.append("clientId[]", clientId)
@@ -94,15 +86,18 @@ export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?
     } catch (err) {
       setError(err as Error)
       console.error("Error fetching process history:", err)
+      toast.error("Error al cargar los documentos históricos")
     } finally {
       setIsLoading(false)
     }
-  }, [clientId, dateFrom, dateTo, state.page, state.limit, state.sortBy, state.sortOrder])
+  }, [clientId, dateFrom, dateTo, state.page, state.limit, isEnabled])
 
-  // Fetch data when dependencies change
+  // Fetch data when enabled or dependencies change
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    if (isEnabled) {
+      fetchData()
+    }
+  }, [fetchData, isEnabled])
 
   // Transform and filter documents
   const documents = useMemo(() => {
@@ -136,17 +131,9 @@ export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?
       docs = docs.filter((doc) => filters.selectedMonths.includes(doc.monthLabel))
     }
 
-    return sortDocuments(docs, state.sortBy, state.sortOrder)
-  }, [rawData, filters, state.sortBy, state.sortOrder])
-
-  // Group documents
-  const groupedDocuments = useMemo(() => {
-    if (state.groupBy === "process") {
-      return groupDocumentsByProcess(documents)
-    } else {
-      return groupDocumentsByMonth(documents)
-    }
-  }, [documents, state.groupBy])
+    // Apply fixed sorting
+    return sortDocuments(docs, FIXED_SORT_BY, FIXED_SORT_ORDER)
+  }, [rawData, filters])
 
   // Get unique processes for sidebar
   const processes = useMemo(() => {
@@ -251,7 +238,6 @@ export function useDocumentExplorer(clientId: string, dateFrom?: string, dateTo?
   return {
     // Data
     documents,
-    groupedDocuments,
     processes,
     totalDocuments: rawData?.total || 0,
     totalPages: rawData?.totalPages || 1,

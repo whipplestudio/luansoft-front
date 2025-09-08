@@ -40,14 +40,17 @@ export interface DocumentItem {
   originalDate?: string
   sourceId: string
   monthLabel: string // MMM yyyy, usando originalDate || completedAt
+  monthValue: string // YYYY-MM, para filtros y agrupaciones
   docKind: "Imagen" | "PDF" | "Otros"
   displayTitle: string // `${processName} · ${monthLabel}`
+  paymentPeriod?: string
 }
 
 export function flattenProcessHistory(items: ProcessHistoryItem[]): DocumentItem[] {
   return items.map((item) => {
     const dateToUse = item.originalDate || item.dateCompleted
     const monthLabel = dateToUse ? format(new Date(dateToUse), "MMM yyyy", { locale: es }) : "Sin fecha"
+    const monthValue = dateToUse ? format(new Date(dateToUse), "yyyy-MM") : ""
 
     const docKind = getDocumentKind(item.file.type)
     const accountant = item.contador
@@ -69,8 +72,10 @@ export function flattenProcessHistory(items: ProcessHistoryItem[]): DocumentItem
       originalDate: item.originalDate,
       sourceId: item.id,
       monthLabel,
+      monthValue,
       docKind,
       displayTitle: `${item.process.name} · ${monthLabel}`,
+      paymentPeriod: item.paymentPeriod,
     }
   })
 }

@@ -1,6 +1,4 @@
-// Tipos base para el historial de procesos
-
-// Tipo para el archivo asociado a un proceso histórico
+// Base types for process history items
 export interface ProcessHistoryFile {
   id: string
   originalName: string
@@ -8,31 +6,30 @@ export interface ProcessHistoryFile {
   mimeType: string
   sizeBytes: number
   url?: string
+  thumbnailUrl?: string
 }
 
-// Tipo para el contador asociado a un proceso histórico
 export interface ProcessHistoryAccountant {
   id: string
   firstName: string
   lastName: string
   email: string
+  fullName: string
 }
 
-// Tipo para el proceso asociado al historial
 export interface ProcessHistoryProcess {
   id: string
   name: string
   description?: string
 }
 
-// Tipo para el cliente asociado al historial
 export interface ProcessHistoryClient {
   id: string
   company: string
-  rfc?: string
+  rfc: string
+  email?: string
 }
 
-// Tipo para un item individual del historial de procesos
 export interface ProcessHistoryItem {
   id: string
   processId: string
@@ -41,124 +38,118 @@ export interface ProcessHistoryItem {
   clientName: string
   accountantId: string
   accountant: string
-  status: string
-  dateCompleted: string // ISO string
-  originalDate: string // ISO string
-  commitmentDate: string // ISO string
-  graceDays: number
-  docKind: string
-  paymentPeriod: string
-  monthLabel: string
-  displayTitle: string
+  accountantData?: ProcessHistoryAccountant
+  processData?: ProcessHistoryProcess
+  clientData?: ProcessHistoryClient
   fileId: string
   fileName: string
+  originalFileName: string
   mimeType: string
   sizeBytes: number
-  completedAt: string // ISO string
+  docKind: string
+  paymentPeriod?: string
+  monthLabel: string
+  displayTitle: string
+  url?: string
+  thumbnailUrl?: string
   file?: ProcessHistoryFile
-  process?: ProcessHistoryProcess
-  client?: ProcessHistoryClient
-  accountantInfo?: ProcessHistoryAccountant
+  dateCompleted: string // ISO string
+  completedAt: string // ISO string
+  originalDate: string // ISO string
+  createdAt: string // ISO string
+  updatedAt: string // ISO string
 }
 
-// Tipo para la respuesta paginada del historial
+// API Response types
 export interface ProcessHistoryResponse {
   success: boolean
   message: string
   errorCode: string | null
   data: {
     data: ProcessHistoryItem[]
-    pagination: {
-      page: number
-      limit: number
-      total: number
-      totalPages: number
-    }
+    total: number
+    page: number
+    limit: number
+    totalPages: number
   }
 }
 
-// Tipo para los filtros del historial de procesos
+// Filter types
 export interface ProcessHistoryFiltersType {
   clientId?: string
-  from?: string // ISO string
-  to?: string // ISO string
-  q?: string // búsqueda general
-  search?: string // alias para q
+  clientIds?: string[]
   processId?: string
+  processIds?: string[]
   accountantId?: string
-  status?: string
+  accountantIds?: string[]
+  from?: string // ISO date string
+  to?: string // ISO date string
+  q?: string // search query
+  search?: string // alternative search field
   docKind?: string[]
-  paymentPeriod?: string[]
+  paymentPeriod?: "MONTHLY" | "QUARTERLY" | "ANNUAL"
+  monthLabel?: string[]
   selectedProcesses?: string[]
   selectedMonths?: string[]
   groupBy?: "process" | "month"
   viewMode?: "cards" | "table"
 }
 
-// Tipo para el ordenamiento del historial
+// Sorting types
 export interface ProcessHistorySorting {
-  sortBy:
-    | "dateCompleted"
-    | "originalDate"
-    | "processName"
-    | "clientName"
-    | "accountant"
-    | "status"
-    | "docKind"
-    | "paymentPeriod"
-    | "sizeBytes"
+  sortBy: "clientName" | "dateCompleted"
   sortOrder: "asc" | "desc"
 }
 
-// Tipo para los parámetros de paginación
+// Pagination types
 export interface ProcessHistoryPagination {
   page: number
   limit: number
 }
 
-// Tipo para los parámetros completos de la consulta del historial
+// Combined query parameters
 export interface ProcessHistoryQueryParams
   extends ProcessHistoryFiltersType,
     ProcessHistorySorting,
     ProcessHistoryPagination {}
 
-// Tipo para el estado del explorador de documentos
-export interface DocumentExplorerState {
-  groupBy: "process" | "month"
-  viewMode: "cards" | "table"
-  sortBy: string
-  sortOrder: "asc" | "desc"
+// Hook return types
+export interface ProcessHistoryHookReturn {
+  data: ProcessHistoryItem[]
+  isLoading: boolean
+  error: Error | null
+  totalItems: number
+  totalPages: number
+  currentPage: number
+  fetchProcessHistory: (
+    filters: ProcessHistoryFiltersType,
+    sorting: ProcessHistorySorting,
+    pagination: ProcessHistoryPagination,
+  ) => Promise<void>
+  refetch: () => Promise<void>
 }
 
-// Tipo para los filtros del explorador de documentos
-export interface DocumentExplorerFilters {
-  search: string
-  docKind: string[]
-  paymentPeriod: string[]
-  selectedProcesses: string[]
-  selectedMonths: string[]
+// Document preview types
+export interface DocumentPreviewState {
+  isLoading: boolean
+  error: string | null
+  url: string | null
 }
 
-// Tipo para un proceso con sus meses disponibles (usado en el selector)
-export interface ProcessWithMonths {
-  id: string
-  name: string
-  months: Array<{
-    value: string
-    label: string
-    count: number
-  }>
-  totalDocuments: number
-}
-
-// Tipo para estadísticas del historial
-export interface ProcessHistoryStats {
-  totalDocuments: number
-  totalProcesses: number
-  dateRange: {
-    from: string // ISO string
-    to: string // ISO string
+export interface DocumentPreviewCache {
+  [fileId: string]: {
+    url: string
+    timestamp: number
+    ttl: number
   }
-  documentsByType: Record<string, number>
-  documentsByPeriod: Record<string, number>
+}
+
+// URL cache response
+export interface DownloadUrlResponse {
+  success: boolean
+  message: string
+  errorCode: string | null
+  data: {
+    url: string
+  }
 }

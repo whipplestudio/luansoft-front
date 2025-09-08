@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Separator } from "@/components/ui/separator"
 import {
   Search,
   Filter,
@@ -24,12 +23,10 @@ import {
   X,
   Grid3X3,
   List,
-  ArrowUpDown,
   Archive,
   Copy,
   Trash2,
   RefreshCw,
-  ExternalLink,
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -45,7 +42,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import type { DocumentItem } from "@/utils/processHistoryUtils"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useProcessHistory } from "@/hooks/useProcessHistory"
-import type { ProcessHistoryFiltersType, ProcessHistorySorting } from "@/types/processHistory"
+import type { ProcessHistoryFiltersType, ProcessHistorySorting, DownloadUrlResponse } from "@/types/processHistory"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
 import { startOfDay, endOfDay, subDays } from "date-fns"
@@ -63,16 +60,6 @@ interface ProcessItem {
     originalName: string
     url: string
     type: string
-  }
-}
-
-// Interface para la respuesta de la API de URL de descarga
-interface DownloadUrlResponse {
-  success: boolean
-  message: string
-  errorCode: string | null
-  data: {
-    url: string
   }
 }
 
@@ -112,7 +99,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [currentProcesses, setCurrentProcesses] = useState<ProcessItem[]>([])
   const [isLoadingCurrent, setIsLoadingCurrent] = useState(false)
 
-  // Hook para procesos históricos
+  // Hook para procesos históricos (legacy - mantenido para compatibilidad)
   const {
     data: historicalProcesses,
     isLoading: isLoadingHistorical,
@@ -122,7 +109,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     fetchProcessHistory,
   } = useProcessHistory()
 
-  // Estados para filtros y ordenamiento del historial
+  // Estados para filtros y ordenamiento del historial (legacy)
   const [historicalFilters, setHistoricalFilters] = useState<ProcessHistoryFiltersType>({})
   const [historicalSorting, setHistoricalSorting] = useState<ProcessHistorySorting>({
     sortBy: "dateCompleted",
@@ -165,14 +152,14 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   // Estados para preview de documentos
   const [previewDocument, setPreviewDocument] = useState<DocumentItem | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [loadingDocumentIds, setLoadingDocumentIds] = useState<Set<string>>(new Set())
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
 
-  // Document explorer hook
+  // Document explorer hook - ONLY enabled when historical tab is active
+  const isExplorerActive = activeTab === "historical"
   const {
     documents,
-    groupedDocuments,
     processes: documentExplorerProcesses,
     totalDocuments,
     filters,
@@ -191,6 +178,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     // Convert date range to ISO strings
     dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined,
     dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined,
+    isExplorerActive, // Only fetch when explorer tab is active
   )
 
   // Función para obtener contadores
@@ -258,41 +246,36 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }
 
-  // Función para manejar la vista previa de documentos
-  const handleDocumentPreview = async (document: DocumentItem, forceRefresh = false) => {
-    setIsLoadingPreview(true)
-    setPreviewError(null)
+  // Función para manejar la vista previa de documentos con loading state manual
+  const handleDocumentPreview = async (document: DocumentItem) => {
+    // Verificar si ya está en cache para evitar loading innecesario
+    const cached = urlCache[document.id]
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      // Abrir directamente desde cache sin loading
+      openPreviewModal(document, cached.url)
+      return
+    }
+
+    // Verificar si ya está cargando este documento
+    if (loadingDocumentIds.has(document.id)) {
+      return
+    }
+
+    // Agregar al set de documentos cargando
     setLoadingDocumentIds((prev) => new Set(prev).add(document.id))
+    setPreviewError(null)
 
     try {
-      const signedUrl = await getSignedFileUrl(document.id, forceRefresh)
-
+      const signedUrl = await getSignedFileUrl(document.id)
       if (signedUrl) {
-        setPreviewDocument(document)
-        setPreviewUrl(signedUrl)
-
-        // Determinar tipo de documento basado en mimeType
-        const mimeType = document.mimeType || ""
-        if (mimeType.startsWith("image/")) {
-          setDocumentType("image")
-        } else if (mimeType === "application/pdf") {
-          setDocumentType("pdf")
-        } else {
-          // Fallback basado en extensión del archivo
-          setDocumentType(document.fileName.toLowerCase().includes("pdf") ? "pdf" : "image")
-        }
-
-        setDocumentTitle(document.processName)
-        setFileName(document.fileName)
-        setFileId(document.id)
-        setIsDocumentViewerOpen(true)
+        openPreviewModal(document, signedUrl)
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al obtener la vista previa"
       setPreviewError(errorMessage)
-      toast.error(errorMessage)
+      toast.error("No se pudo cargar la vista previa. Reintentar.")
     } finally {
-      setIsLoadingPreview(false)
+      // Remover del set de documentos cargando
       setLoadingDocumentIds((prev) => {
         const newSet = new Set(prev)
         newSet.delete(document.id)
@@ -301,10 +284,38 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }
 
+  // Función auxiliar para abrir el modal de preview
+  const openPreviewModal = (document: DocumentItem, signedUrl: string) => {
+    setPreviewDocument(document)
+    setPreviewUrl(signedUrl)
+
+    // Determinar tipo de documento basado en mimeType
+    const mimeType = document.mimeType || ""
+    if (mimeType.startsWith("image/")) {
+      setDocumentType("image")
+    } else if (mimeType === "application/pdf") {
+      setDocumentType("pdf")
+    } else {
+      // Fallback basado en extensión del archivo
+      setDocumentType(document.fileName.toLowerCase().includes("pdf") ? "pdf" : "image")
+    }
+
+    setDocumentTitle(document.processName)
+    setFileName(document.fileName)
+    setFileId(document.id)
+    setIsDocumentViewerOpen(true)
+  }
+
   // Función para reintentar la vista previa
   const handleRetryPreview = () => {
     if (previewDocument) {
-      handleDocumentPreview(previewDocument, true) // Force refresh
+      // Forzar refresh del cache
+      setUrlCache((prev) => {
+        const newCache = { ...prev }
+        delete newCache[previewDocument.id]
+        return newCache
+      })
+      handleDocumentPreview(previewDocument)
     }
   }
 
@@ -445,27 +456,36 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }, [client])
 
-  // Función para manejar cambios en filtros del historial
+  // Helper to prepare filters for the fetch hook (legacy)
+  const getFetchableFilters = (filters: ProcessHistoryFiltersType) => {
+    const filtersToFetch = { ...filters }
+    if (Array.isArray(filtersToFetch.paymentPeriod)) {
+      filtersToFetch.paymentPeriod = filtersToFetch.paymentPeriod[0] as "MONTHLY" | "QUARTERLY" | "ANNUAL" | undefined
+    }
+    return filtersToFetch
+  }
+
+  // Legacy functions for historical processes (kept for compatibility)
   const handleHistoricalFiltersChange = (newFilters: ProcessHistoryFiltersType) => {
     setHistoricalFilters(newFilters)
-    fetchProcessHistory(newFilters, historicalSorting, { page: 1, limit: historicalLimit })
+    fetchProcessHistory(getFetchableFilters(newFilters), historicalSorting, { page: 1, limit: historicalLimit })
   }
 
-  // Función para manejar cambios en ordenamiento del historial
   const handleHistoricalSortingChange = (newSorting: ProcessHistorySorting) => {
     setHistoricalSorting(newSorting)
-    fetchProcessHistory(historicalFilters, newSorting, { page: 1, limit: historicalLimit })
+    fetchProcessHistory(getFetchableFilters(historicalFilters), newSorting, { page: 1, limit: historicalLimit })
   }
 
-  // Función para manejar cambio de página en el historial
   const handleHistoricalPageChange = (newPage: number) => {
-    fetchProcessHistory(historicalFilters, historicalSorting, { page: newPage, limit: historicalLimit })
+    fetchProcessHistory(getFetchableFilters(historicalFilters), historicalSorting, {
+      page: newPage,
+      limit: historicalLimit,
+    })
   }
 
-  // Función para manejar cambio de límite por página
   const handleHistoricalLimitChange = (newLimit: number) => {
     setHistoricalLimit(newLimit)
-    fetchProcessHistory(historicalFilters, historicalSorting, { page: 1, limit: newLimit })
+    fetchProcessHistory(getFetchableFilters(historicalFilters), historicalSorting, { page: 1, limit: newLimit })
   }
 
   // Document explorer functions
@@ -499,6 +519,13 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       chips.push({ type: "search", label: `Búsqueda: ${filters.search}`, value: filters.search })
     }
 
+    if (dateRange?.from || dateRange?.to) {
+      const fromStr = dateRange?.from ? format(dateRange.from, "dd/MM/yyyy", { locale: es }) : ""
+      const toStr = dateRange?.to ? format(dateRange.to, "dd/MM/yyyy", { locale: es }) : ""
+      const rangeLabel = fromStr && toStr ? `${fromStr} - ${toStr}` : fromStr || toStr
+      chips.push({ type: "dateRange", label: `Fecha: ${rangeLabel}`, value: "dateRange" })
+    }
+
     filters.docKind.forEach((kind) => {
       chips.push({ type: "docKind", label: `Tipo: ${kind}`, value: kind })
     })
@@ -515,6 +542,9 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       case "search":
         updateFilters({ search: "" })
         break
+      case "dateRange":
+        setDateRange(undefined)
+        break
       case "docKind":
         updateFilters({ docKind: filters.docKind.filter((k) => k !== value) })
         break
@@ -522,6 +552,11 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         updateFilters({ paymentPeriod: filters.paymentPeriod.filter((p) => p !== value) })
         break
     }
+  }
+
+  // Función para verificar si un documento está cargando
+  const isDocumentLoading = (documentId: string) => {
+    return loadingDocumentIds.has(documentId)
   }
 
   // Table columns for document table view
@@ -605,24 +640,25 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     {
       id: "actions",
       header: "Acciones",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDocumentPreview(row.original)}
-            disabled={loadingDocumentIds.has(row.original.id)}
-            className="h-8 w-8 p-0"
-            title="Ver documento"
-          >
-            {loadingDocumentIds.has(row.original.id) ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const isLoading = isDocumentLoading(row.original.id)
+        return (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDocumentPreview(row.original)}
+              disabled={isLoading}
+              className="h-8 w-8 p-0"
+              title="Ver documento"
+              aria-busy={isLoading}
+              aria-disabled={isLoading}
+            >
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
+        )
+      },
     },
   ]
 
@@ -633,7 +669,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     return matchesSearch && matchesStatus
   })
 
-  // Función para restablecer filtros del historial
+  // Función para restablecer filtros del historial (legacy)
   const handleResetHistoricalFilters = () => {
     const defaultFilters: ProcessHistoryFiltersType = {
       clientId: client?.originalData?.id,
@@ -649,7 +685,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     setHistoricalLimit(defaultLimit)
 
     // Re-fetch with default values
-    fetchProcessHistory(defaultFilters, defaultSorting, { page: 1, limit: defaultLimit })
+    fetchProcessHistory(getFetchableFilters(defaultFilters), defaultSorting, { page: 1, limit: defaultLimit })
   }
 
   // Función para restablecer filtros de procesos actuales
@@ -661,7 +697,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   // Función para manejar cambios en el rango de fechas
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setDateRange(range)
-    // Update URL params if needed
+    // Update URL params if needed (excluding sortBy/sortOrder)
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
       if (range?.from) {
@@ -674,40 +710,25 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       } else {
         url.searchParams.delete("to")
       }
+      // Remove any existing sortBy/sortOrder params for compatibility
+      url.searchParams.delete("sortBy")
+      url.searchParams.delete("sortOrder")
       window.history.replaceState({}, "", url.toString())
     }
   }
 
-  // Cargar datos cuando se abre el modal
+  // Cargar datos cuando se abre el modal - REMOVED processhistory fetch
   useEffect(() => {
     if (isOpen && client) {
       fetchCurrentProcesses()
       fetchContadores()
       fetchProcesses()
 
-      // Establecer filtro de cliente para el historial
-      const clientFilter: ProcessHistoryFiltersType = {
-        clientId: client.originalData.id,
-      }
-      setHistoricalFilters(clientFilter)
+      // NO longer setting historical filters here - they are handled by the document explorer
     }
   }, [isOpen, client, fetchCurrentProcesses, fetchContadores, fetchProcesses])
 
-  // Cargar datos históricos solo cuando se abre el tab de historial
-  useEffect(() => {
-    if (isOpen && client && activeTab === "historical" && historicalFilters.clientId) {
-      fetchProcessHistory(historicalFilters, historicalSorting, { page: currentPage, limit: historicalLimit })
-    }
-  }, [
-    isOpen,
-    client,
-    activeTab,
-    historicalFilters,
-    historicalSorting,
-    currentPage,
-    historicalLimit,
-    fetchProcessHistory,
-  ])
+  // REMOVED: Legacy historical data loading effect - now handled by manual fetch in useDocumentExplorer
 
   // Limpiar estados al cerrar
   useEffect(() => {
@@ -732,6 +753,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       setPreviewUrl(null)
       setPreviewError(null)
       setLoadingDocumentIds(new Set())
+      setIsLoadingPreview(false)
     }
   }, [isOpen])
 
@@ -949,25 +971,27 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               >
                 {/* Document Explorer Header */}
                 <div className="sticky top-0 z-10 bg-white border-b p-4 space-y-4">
-                  {/* Search and main controls */}
-                  <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Main controls grid - 2 rows */}
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    {/* Row 1: Controls */}
                     {/* Date Range Picker */}
-                    <div className="w-full lg:w-80">
+                    <div className="col-span-12 md:col-span-4">
                       <DateRangePicker
                         value={dateRange}
                         onChange={handleDateRangeChange}
                         placeholder="Seleccionar rango de fechas"
+                        className="h-11"
                       />
                     </div>
 
                     {/* Search */}
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <div className="col-span-12 md:col-span-7 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <Input
                         placeholder="Buscar documentos... (presiona / para enfocar)"
                         value={filters.search}
                         onChange={(e) => updateFilters({ search: e.target.value })}
-                        className="pl-10"
+                        className="pl-10 h-11"
                         onKeyDown={(e) => {
                           if (e.key === "/" && e.target !== document.activeElement) {
                             e.preventDefault()
@@ -979,7 +1003,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
                           onClick={() => updateFilters({ search: "" })}
                         >
                           <X className="h-4 w-4" />
@@ -987,90 +1011,44 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                       )}
                     </div>
 
-                    {/* View controls */}
-                    <div className="flex items-center gap-2">
-                      {/* Group by */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Agrupar:</span>
-                        <ToggleGroup
-                          type="single"
-                          value={state.groupBy}
-                          onValueChange={(value) => value && updateState({ groupBy: value as "process" | "month" })}
-                        >
-                          <ToggleGroupItem value="process" size="sm">
-                            Proceso
-                          </ToggleGroupItem>
-                          <ToggleGroupItem value="month" size="sm">
-                            Mes
-                          </ToggleGroupItem>
-                        </ToggleGroup>
-                      </div>
-
-                      <Separator orientation="vertical" className="h-6" />
-
-                      {/* View mode */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Vista:</span>
-                        <ToggleGroup
-                          type="single"
-                          value={state.viewMode}
-                          onValueChange={(value) => value && updateState({ viewMode: value as "cards" | "table" })}
-                        >
-                          <ToggleGroupItem value="cards" size="sm">
-                            <Grid3X3 className="h-4 w-4" />
-                          </ToggleGroupItem>
-                          <ToggleGroupItem value="table" size="sm">
-                            <List className="h-4 w-4" />
-                          </ToggleGroupItem>
-                        </ToggleGroup>
-                      </div>
-
-                      <Separator orientation="vertical" className="h-6" />
-
-                      {/* Sort */}
-                      <Select
-                        value={`${state.sortBy}-${state.sortOrder}`}
-                        onValueChange={(value) => {
-                          const [sortBy, sortOrder] = value.split("-")
-                          updateState({ sortBy, sortOrder: sortOrder as "asc" | "desc" })
-                        }}
+                    {/* View mode toggle */}
+                    <div className="col-span-12 md:col-span-1 md:justify-self-end flex md:justify-end">
+                      <ToggleGroup
+                        type="single"
+                        value={state.viewMode}
+                        onValueChange={(value) => value && updateState({ viewMode: value as "cards" | "table" })}
+                        className="h-11"
                       >
-                        <SelectTrigger className="w-48">
-                          <ArrowUpDown className="h-4 w-4 mr-2" />
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="originalDate-desc">Fecha original ↓</SelectItem>
-                          <SelectItem value="originalDate-asc">Fecha original ↑</SelectItem>
-                          <SelectItem value="dateCompleted-desc">Fecha completado ↓</SelectItem>
-                          <SelectItem value="dateCompleted-asc">Fecha completado ↑</SelectItem>
-                          <SelectItem value="processName-asc">Proceso A-Z</SelectItem>
-                          <SelectItem value="processName-desc">Proceso Z-A</SelectItem>
-                          <SelectItem value="size-desc">Tamaño ↓</SelectItem>
-                          <SelectItem value="size-asc">Tamaño ↑</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <ToggleGroupItem value="cards" size="sm" className="h-11 w-11">
+                          <Grid3X3 className="h-4 w-4" />
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="table" size="sm" className="h-11 w-11">
+                          <List className="h-4 w-4" />
+                        </ToggleGroupItem>
+                      </ToggleGroup>
                     </div>
-                  </div>
 
-                  {/* Filter chips */}
-                  {getActiveFilters().length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {getActiveFilters().map((filter, index) => (
-                        <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                          {filter.label}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-4 w-4 p-0 hover:bg-transparent"
-                            onClick={() => removeFilter(filter.type, filter.value)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                    {/* Row 2: Filter chips */}
+                    {getActiveFilters().length > 0 && (
+                      <div className="col-span-12">
+                        <div className="flex flex-wrap gap-2 overflow-x-auto whitespace-nowrap md:whitespace-normal">
+                          {getActiveFilters().map((filter, index) => (
+                            <Badge key={index} variant="secondary" className="flex items-center gap-1 flex-shrink-0">
+                              {filter.label}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-4 w-4 p-0 hover:bg-transparent"
+                                onClick={() => removeFilter(filter.type, filter.value)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Selection actions */}
                   {selectedDocuments.size > 0 && (
@@ -1140,6 +1118,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                                 onSelect={toggleDocumentSelection}
                                 onPreview={handleDocumentPreview}
                                 onDownload={(doc) => handleDownloadHistoricalFile(doc.id, doc.fileName)}
+                                isLoadingPreview={isDocumentLoading(document.id)}
                               />
                             ))}
                           </div>
