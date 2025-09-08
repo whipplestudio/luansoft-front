@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { X, Download, Maximize, Minimize } from "lucide-react"
+import { X, Download, Maximize, Minimize, Loader2 } from "lucide-react"
 import { DocumentPreview } from "./DocumentPreview"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./custom-dialog"
 
@@ -14,6 +14,7 @@ interface DocumentViewerModalProps {
   title: string
   fileName: string
   onDownload?: () => void
+  isLoading?: boolean
 }
 
 export function DocumentViewerModal({
@@ -24,6 +25,7 @@ export function DocumentViewerModal({
   title,
   fileName,
   onDownload,
+  isLoading = false,
 }: DocumentViewerModalProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -177,7 +179,7 @@ export function DocumentViewerModal({
             </div>
           </div>
         </DialogHeader>
-        <div ref={contentRef} className="flex-1 overflow-hidden p-4 bg-gray-50 relative">
+        <div ref={contentRef} className="flex-1 overflow-hidden p-4 bg-gray-50 relative flex items-center justify-center">
           {/* Botón flotante para salir de pantalla completa (solo visible en modo pantalla completa) */}
           {isFullscreen && (
             <Button
@@ -192,11 +194,16 @@ export function DocumentViewerModal({
             </Button>
           )}
 
-          {documentUrl && (
+          {isLoading ? (
+            <div className="flex flex-col items-center gap-2 text-gray-500">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <p>Cargando documento...</p>
+            </div>
+          ) : documentUrl ? (
             <div className="w-full h-full">
               <DocumentPreview documentUrl={documentUrl} documentType={documentType} title={title} />
             </div>
-          )}
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
