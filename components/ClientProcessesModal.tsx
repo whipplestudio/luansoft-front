@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Separator } from "@/components/ui/separator"
 import {
   Search,
   Filter,
   Eye,
-  Download,
   Calendar,
   Clock,
   CheckCircle,
@@ -21,6 +22,14 @@ import {
   FileText,
   Loader2,
   X,
+  Grid3X3,
+  List,
+  ArrowUpDown,
+  Archive,
+  Copy,
+  Trash2,
+  RefreshCw,
+  ExternalLink,
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -28,14 +37,18 @@ import { axiosInstance } from "@/lib/axios"
 import { toast } from "sonner"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
 import { DataTable } from "@/components/data-table"
-import { ProcessHistoryFilters } from "@/components/ProcessHistoryFilters"
-import { useProcessHistory } from "@/hooks/useProcessHistory"
+import { useDocumentExplorer } from "@/hooks/useDocumentExplorer"
+import { DocumentCard } from "@/components/DocumentCard"
+import { ProcessSelector } from "@/components/ProcessSelector"
 import type { FiscalDeliverable } from "@/types"
 import type { ColumnDef } from "@tanstack/react-table"
-import type {
-  ProcessHistoryFilters as ProcessHistoryFiltersType,
-  ProcessHistorySorting,
-} from "@/hooks/useProcessHistory"
+import type { DocumentItem } from "@/utils/processHistoryUtils"
+import { Checkbox } from "@/components/ui/checkbox"
+import { useProcessHistory } from "@/hooks/useProcessHistory"
+import type { ProcessHistoryFiltersType, ProcessHistorySorting } from "@/types/processHistory"
+import { DateRangePicker } from "@/components/ui/date-range-picker"
+import type { DateRange } from "react-day-picker"
+import { startOfDay, endOfDay, subDays } from "date-fns"
 
 // Interfaces para los datos de procesos
 interface ProcessItem {
@@ -83,6 +96,17 @@ interface ClientProcessesModalProps {
   client: FiscalDeliverable | null
 }
 
+// Cache para URLs firmadas
+interface UrlCache {
+  [fileId: string]: {
+    url: string
+    timestamp: number
+    ttl: number
+  }
+}
+
+const URL_CACHE_TTL = 5 * 60 * 1000 // 5 minutos
+
 export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcessesModalProps) {
   // Estados para procesos actuales
   const [currentProcesses, setCurrentProcesses] = useState<ProcessItem[]>([])
@@ -126,6 +150,49 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [fileId, setFileId] = useState<string>("")
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
 
+  // Estados para filtro de rango de fechas
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    // Default to last 30 days
+    return {
+      from: subDays(new Date(), 30),
+      to: new Date(),
+    }
+  })
+
+  // Cache para URLs firmadas
+  const [urlCache, setUrlCache] = useState<UrlCache>({})
+
+  // Estados para preview de documentos
+  const [previewDocument, setPreviewDocument] = useState<DocumentItem | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [loadingDocumentIds, setLoadingDocumentIds] = useState<Set<string>>(new Set())
+
+  // Document explorer hook
+  const {
+    documents,
+    groupedDocuments,
+    processes: documentExplorerProcesses,
+    totalDocuments,
+    filters,
+    state,
+    selectedDocuments,
+    isLoading: isLoadingDocuments,
+    updateFilters,
+    updateState,
+    toggleDocumentSelection,
+    selectAllDocuments,
+    clearSelection,
+    downloadSelectedAsZip,
+    copySelectedUrls,
+  } = useDocumentExplorer(
+    client?.originalData?.id || "",
+    // Convert date range to ISO strings
+    dateRange?.from ? startOfDay(dateRange.from).toISOString() : undefined,
+    dateRange?.to ? endOfDay(dateRange.to).toISOString() : undefined,
+  )
+
   // Función para obtener contadores
   const fetchContadores = useCallback(async () => {
     setIsLoadingContadores(true)
@@ -156,28 +223,92 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }, [])
 
-  // Función para obtener la URL de descarga de un archivo
-  const getFileDownloadUrl = async (fileId: string): Promise<string | null> => {
+  // Función para obtener la URL firmada de un archivo con cache
+  const getSignedFileUrl = async (fileId: string, forceRefresh = false): Promise<string | null> => {
+    // Verificar cache si no es refresh forzado
+    if (!forceRefresh && urlCache[fileId]) {
+      const cached = urlCache[fileId]
+      const now = Date.now()
+      if (now - cached.timestamp < cached.ttl) {
+        return cached.url
+      }
+    }
+
     try {
-      setIsLoadingDocument(true)
       const response = await axiosInstance.get<DownloadUrlResponse>(`/file/${fileId}/download-url`)
 
       if (response.data.success && response.data.data.url) {
+        // Guardar en cache
+        setUrlCache((prev) => ({
+          ...prev,
+          [fileId]: {
+            url: response.data.data.url,
+            timestamp: Date.now(),
+            ttl: URL_CACHE_TTL,
+          },
+        }))
+
         return response.data.data.url
       } else {
-        toast.error(`Error al obtener la URL del archivo: ${response.data.message}`)
-        return null
+        throw new Error(response.data.message || "Error al obtener la URL del archivo")
       }
     } catch (error) {
-      console.error("Error al obtener la URL de descarga:", error)
-      toast.error("No se pudo obtener la URL del archivo")
-      return null
-    } finally {
-      setIsLoadingDocument(false)
+      console.error("Error al obtener la URL firmada:", error)
+      throw error
     }
   }
 
-  // Función para abrir el visor de documentos
+  // Función para manejar la vista previa de documentos
+  const handleDocumentPreview = async (document: DocumentItem, forceRefresh = false) => {
+    setIsLoadingPreview(true)
+    setPreviewError(null)
+    setLoadingDocumentIds((prev) => new Set(prev).add(document.id))
+
+    try {
+      const signedUrl = await getSignedFileUrl(document.id, forceRefresh)
+
+      if (signedUrl) {
+        setPreviewDocument(document)
+        setPreviewUrl(signedUrl)
+
+        // Determinar tipo de documento basado en mimeType
+        const mimeType = document.mimeType || ""
+        if (mimeType.startsWith("image/")) {
+          setDocumentType("image")
+        } else if (mimeType === "application/pdf") {
+          setDocumentType("pdf")
+        } else {
+          // Fallback basado en extensión del archivo
+          setDocumentType(document.fileName.toLowerCase().includes("pdf") ? "pdf" : "image")
+        }
+
+        setDocumentTitle(document.processName)
+        setFileName(document.fileName)
+        setFileId(document.id)
+        setIsDocumentViewerOpen(true)
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Error al obtener la vista previa"
+      setPreviewError(errorMessage)
+      toast.error(errorMessage)
+    } finally {
+      setIsLoadingPreview(false)
+      setLoadingDocumentIds((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(document.id)
+        return newSet
+      })
+    }
+  }
+
+  // Función para reintentar la vista previa
+  const handleRetryPreview = () => {
+    if (previewDocument) {
+      handleDocumentPreview(previewDocument, true) // Force refresh
+    }
+  }
+
+  // Función para abrir el visor de documentos (procesos actuales)
   const handleOpenDocumentViewer = async (process: ProcessItem | any) => {
     let fileIdToUse: string
     let fileNameToUse: string
@@ -200,10 +331,10 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
 
     setIsLoadingDocument(true)
     try {
-      const downloadUrl = await getFileDownloadUrl(fileIdToUse)
+      const signedUrl = await getSignedFileUrl(fileIdToUse)
 
-      if (downloadUrl) {
-        setDocumentUrl(downloadUrl)
+      if (signedUrl) {
+        setDocumentUrl(signedUrl)
         setDocumentType(fileNameToUse.toLowerCase().includes("pdf") ? "pdf" : "image")
         setDocumentTitle(processName)
         setFileName(fileNameToUse)
@@ -229,7 +360,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         return
       }
 
-      const url = await getFileDownloadUrl(fileId)
+      const url = await getSignedFileUrl(fileId)
 
       if (url) {
         const response = await axiosInstance.get(url, { responseType: "blob" })
@@ -258,7 +389,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const handleDownloadHistoricalFile = async (fileId: string, fileName: string) => {
     try {
       setIsLoadingDocument(true)
-      const url = await getFileDownloadUrl(fileId)
+      const url = await getSignedFileUrl(fileId)
 
       if (url) {
         const response = await axiosInstance.get(url, { responseType: "blob" })
@@ -337,64 +468,215 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     fetchProcessHistory(historicalFilters, historicalSorting, { page: 1, limit: newLimit })
   }
 
-  // Definir las columnas para la tabla del historial
-  const historicalColumns: ColumnDef<any>[] = [
+  // Document explorer functions
+  const handleProcessSelect = (processId: string) => {
+    const currentSelected = filters.selectedProcesses
+    const newSelected = currentSelected.includes(processId)
+      ? currentSelected.filter((id) => id !== processId)
+      : [...currentSelected, processId]
+
+    updateFilters({ selectedProcesses: newSelected })
+  }
+
+  const handleMonthSelect = (processId: string, month: string) => {
+    const currentSelected = filters.selectedMonths
+    const newSelected = currentSelected.includes(month)
+      ? currentSelected.filter((m) => m !== month)
+      : [...currentSelected, month]
+
+    updateFilters({ selectedMonths: newSelected })
+  }
+
+  const handleClearAllSelections = () => {
+    updateFilters({ selectedProcesses: [], selectedMonths: [] })
+  }
+
+  // Filter chips data
+  const getActiveFilters = () => {
+    const chips = []
+
+    if (filters.search) {
+      chips.push({ type: "search", label: `Búsqueda: ${filters.search}`, value: filters.search })
+    }
+
+    filters.docKind.forEach((kind) => {
+      chips.push({ type: "docKind", label: `Tipo: ${kind}`, value: kind })
+    })
+
+    filters.paymentPeriod.forEach((period) => {
+      chips.push({ type: "paymentPeriod", label: `Periodo: ${period}`, value: period })
+    })
+
+    return chips
+  }
+
+  const removeFilter = (type: string, value: string) => {
+    switch (type) {
+      case "search":
+        updateFilters({ search: "" })
+        break
+      case "docKind":
+        updateFilters({ docKind: filters.docKind.filter((k) => k !== value) })
+        break
+      case "paymentPeriod":
+        updateFilters({ paymentPeriod: filters.paymentPeriod.filter((p) => p !== value) })
+        break
+    }
+  }
+
+  // Table columns for document table view
+  const documentTableColumns: ColumnDef<DocumentItem>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllPageRowsSelected()}
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Seleccionar todo"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selectedDocuments.has(row.original.id)}
+          onCheckedChange={() => toggleDocumentSelection(row.original.id)}
+          aria-label="Seleccionar fila"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "displayTitle",
+      header: "Documento",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-gray-400" />
+          <div>
+            <div className="font-medium text-sm">{row.original.displayTitle}</div>
+            <div className="text-xs text-gray-500">{row.original.fileName}</div>
+          </div>
+        </div>
+      ),
+    },
     {
       accessorKey: "processName",
       header: "Proceso",
-      cell: ({ row }) => <div className="text-sm font-medium">{row.getValue("processName")}</div>,
     },
     {
-      accessorKey: "contadorName",
+      accessorKey: "monthLabel",
+      header: "Mes",
+    },
+    {
+      accessorKey: "accountant",
       header: "Contador",
-      cell: ({ row }) => <div className="text-sm">{row.getValue("contadorName")}</div>,
     },
     {
-      accessorKey: "completedDate",
-      header: "Fecha de Completado",
-      cell: ({ row }) => <div className="text-sm">{row.getValue("completedDate")}</div>,
+      accessorKey: "completedAt",
+      header: "Fecha Completado",
+      cell: ({ row }) => {
+        const date = row.original.completedAt
+        return date ? format(new Date(date), "dd/MM/yyyy", { locale: es }) : "N/A"
+      },
     },
     {
-      accessorKey: "originalDueDate",
+      accessorKey: "originalDate",
       header: "Fecha Original",
-      cell: ({ row }) => <div className="text-sm">{row.getValue("originalDueDate")}</div>,
+      cell: ({ row }) => {
+        const date = row.original.originalDate
+        return date ? format(new Date(date), "dd/MM/yyyy", { locale: es }) : "N/A"
+      },
+    },
+    {
+      accessorKey: "docKind",
+      header: "Tipo",
+      cell: ({ row }) => <Badge variant="outline">{row.original.docKind}</Badge>,
+    },
+    {
+      accessorKey: "sizeBytes",
+      header: "Tamaño",
+      cell: ({ row }) => {
+        const size = row.original.sizeBytes
+        if (!size) return "N/A"
+        const sizes = ["B", "KB", "MB", "GB"]
+        const i = Math.floor(Math.log(size) / Math.log(1024))
+        return `${Math.round((size / Math.pow(1024, i)) * 100) / 100} ${sizes[i]}`
+      },
     },
     {
       id: "actions",
       header: "Acciones",
-      cell: ({ row }) => {
-        const process = row.original
-        const hasFile = process.fileUrl !== null
-
-        return (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleOpenDocumentViewer(process)}
-              title="Ver documento"
-              disabled={!hasFile || isLoadingDocument}
-              aria-label={`Ver documento de ${process.processName}`}
-              className="h-8 w-8"
-            >
-              {isLoadingDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDownloadHistoricalFile(process.fileId, process.fileName)}
-              title="Descargar documento"
-              disabled={!hasFile || isLoadingDocument}
-              aria-label={`Descargar documento de ${process.processName}`}
-              className="h-8 w-8"
-            >
-              {isLoadingDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            </Button>
-          </div>
-        )
-      },
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDocumentPreview(row.original)}
+            disabled={loadingDocumentIds.has(row.original.id)}
+            className="h-8 w-8 p-0"
+            title="Ver documento"
+          >
+            {loadingDocumentIds.has(row.original.id) ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      ),
     },
   ]
+
+  // Filtrar procesos actuales
+  const filteredCurrentProcesses = currentProcesses.filter((process) => {
+    const matchesSearch = process.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === "all" || process.deliveryStatus === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  // Función para restablecer filtros del historial
+  const handleResetHistoricalFilters = () => {
+    const defaultFilters: ProcessHistoryFiltersType = {
+      clientId: client?.originalData?.id,
+    }
+    const defaultSorting: ProcessHistorySorting = {
+      sortBy: "dateCompleted",
+      sortOrder: "desc",
+    }
+    const defaultLimit = 10
+
+    setHistoricalFilters(defaultFilters)
+    setHistoricalSorting(defaultSorting)
+    setHistoricalLimit(defaultLimit)
+
+    // Re-fetch with default values
+    fetchProcessHistory(defaultFilters, defaultSorting, { page: 1, limit: defaultLimit })
+  }
+
+  // Función para restablecer filtros de procesos actuales
+  const handleResetCurrentFilters = () => {
+    setSearchTerm("")
+    setStatusFilter("all")
+  }
+
+  // Función para manejar cambios en el rango de fechas
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange(range)
+    // Update URL params if needed
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      if (range?.from) {
+        url.searchParams.set("from", format(range.from, "yyyy-MM-dd"))
+      } else {
+        url.searchParams.delete("from")
+      }
+      if (range?.to) {
+        url.searchParams.set("to", format(range.to, "yyyy-MM-dd"))
+      } else {
+        url.searchParams.delete("to")
+      }
+      window.history.replaceState({}, "", url.toString())
+    }
+  }
 
   // Cargar datos cuando se abre el modal
   useEffect(() => {
@@ -438,6 +720,18 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       setHistoricalFilters({})
       setHistoricalSorting({ sortBy: "dateCompleted", sortOrder: "desc" })
       setHistoricalLimit(10)
+      // Reset date range to default (last 30 days)
+      setDateRange({
+        from: subDays(new Date(), 30),
+        to: new Date(),
+      })
+      // Limpiar cache de URLs
+      setUrlCache({})
+      // Limpiar estados de preview
+      setPreviewDocument(null)
+      setPreviewUrl(null)
+      setPreviewError(null)
+      setLoadingDocumentIds(new Set())
     }
   }, [isOpen])
 
@@ -489,44 +783,12 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }
 
-  // Filtrar procesos actuales
-  const filteredCurrentProcesses = currentProcesses.filter((process) => {
-    const matchesSearch = process.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || process.deliveryStatus === statusFilter
-    return matchesSearch && matchesStatus
-  })
-
-  // Función para restablecer filtros del historial
-  const handleResetHistoricalFilters = () => {
-    const defaultFilters: ProcessHistoryFiltersType = {
-      clientId: client?.originalData?.id,
-    }
-    const defaultSorting: ProcessHistorySorting = {
-      sortBy: "dateCompleted",
-      sortOrder: "desc",
-    }
-    const defaultLimit = 10
-
-    setHistoricalFilters(defaultFilters)
-    setHistoricalSorting(defaultSorting)
-    setHistoricalLimit(defaultLimit)
-
-    // Re-fetch con valores por defecto
-    fetchProcessHistory(defaultFilters, defaultSorting, { page: 1, limit: defaultLimit })
-  }
-
-  // Función para restablecer filtros de procesos actuales
-  const handleResetCurrentFilters = () => {
-    setSearchTerm("")
-    setStatusFilter("all")
-  }
-
   if (!client) return null
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-6xl max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-7xl max-h-[90vh] flex flex-col overflow-hidden">
           {/* Header fijo del modal */}
           <div className="sticky top-0 z-10 bg-white border-b">
             <DialogHeader className="pb-4">
@@ -594,15 +856,15 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                   Procesos Actuales ({filteredCurrentProcesses.length})
                 </TabsTrigger>
                 <TabsTrigger value="historical" className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4" />
-                  Historial ({totalItems})
+                  <Archive className="h-4 w-4" />
+                  Explorador de Documentos ({totalDocuments})
                 </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
 
           {/* Body del modal con scroll */}
-          <div className="flex-1 min-h-0 overflow-scroll">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
               {/* Procesos Actuales */}
               <TabsContent
@@ -659,21 +921,6 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                                       )}
                                       Ver
                                     </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleOpenDocumentViewer(process)}
-                                      disabled={isLoadingDocument}
-                                      className="flex items-center gap-1"
-                                      aria-label={`Descargar documento de ${process.name}`}
-                                    >
-                                      {isLoadingDocument ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Download className="h-4 w-4" />
-                                      )}
-                                      Descargar
-                                    </Button>
                                   </>
                                 )}
                               </div>
@@ -695,59 +942,239 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 )}
               </TabsContent>
 
-              {/* Procesos Históricos */}
+              {/* Document Explorer */}
               <TabsContent
                 value="historical"
                 className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
               >
-                <div className="flex-1 overflow-hidden flex flex-col p-4">
-                  {/* Filtros del historial */}
-                  <ProcessHistoryFilters
-                    filters={historicalFilters}
-                    sorting={historicalSorting}
-                    onFiltersChange={handleHistoricalFiltersChange}
-                    onSortingChange={handleHistoricalSortingChange}
-                    onResetFilters={handleResetHistoricalFilters}
-                    clientName={client.company}
-                    isClientLocked={true}
-                    contadores={contadores}
-                    processes={processes}
-                    isLoadingContadores={isLoadingContadores}
-                    isLoadingProcesses={isLoadingProcesses}
-                  />
+                {/* Document Explorer Header */}
+                <div className="sticky top-0 z-10 bg-white border-b p-4 space-y-4">
+                  {/* Search and main controls */}
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Date Range Picker */}
+                    <div className="w-full lg:w-80">
+                      <DateRangePicker
+                        value={dateRange}
+                        onChange={handleDateRangeChange}
+                        placeholder="Seleccionar rango de fechas"
+                      />
+                    </div>
 
-                  {/* Tabla del historial */}
-                  {isLoadingHistorical ? (
-                    <div className="flex justify-center items-center h-32">
-                      <Loader2 className="h-8 w-8 animate-spin" />
+                    {/* Search */}
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Buscar documentos... (presiona / para enfocar)"
+                        value={filters.search}
+                        onChange={(e) => updateFilters({ search: e.target.value })}
+                        className="pl-10"
+                        onKeyDown={(e) => {
+                          if (e.key === "/" && e.target !== document.activeElement) {
+                            e.preventDefault()
+                            e.currentTarget.focus()
+                          }
+                        }}
+                      />
+                      {filters.search && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          onClick={() => updateFilters({ search: "" })}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                  ) : historicalProcesses.length > 0 ? (
-                    <div className="flex-1 overflow-hidden flex flex-col mt-4">
-                      <div className="flex-1 overflow-auto">
-                        <DataTable
-                          columns={historicalColumns}
-                          data={historicalProcesses}
-                          hideSearchInput={true}
-                          pagination={{
-                            pageCount: totalPages,
-                            page: currentPage,
-                            onPageChange: handleHistoricalPageChange,
-                            perPage: historicalLimit,
-                            onPerPageChange: handleHistoricalLimitChange,
-                          }}
-                        />
+
+                    {/* View controls */}
+                    <div className="flex items-center gap-2">
+                      {/* Group by */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Agrupar:</span>
+                        <ToggleGroup
+                          type="single"
+                          value={state.groupBy}
+                          onValueChange={(value) => value && updateState({ groupBy: value as "process" | "month" })}
+                        >
+                          <ToggleGroupItem value="process" size="sm">
+                            Proceso
+                          </ToggleGroupItem>
+                          <ToggleGroupItem value="month" size="sm">
+                            Mes
+                          </ToggleGroupItem>
+                        </ToggleGroup>
                       </div>
+
+                      <Separator orientation="vertical" className="h-6" />
+
+                      {/* View mode */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Vista:</span>
+                        <ToggleGroup
+                          type="single"
+                          value={state.viewMode}
+                          onValueChange={(value) => value && updateState({ viewMode: value as "cards" | "table" })}
+                        >
+                          <ToggleGroupItem value="cards" size="sm">
+                            <Grid3X3 className="h-4 w-4" />
+                          </ToggleGroupItem>
+                          <ToggleGroupItem value="table" size="sm">
+                            <List className="h-4 w-4" />
+                          </ToggleGroupItem>
+                        </ToggleGroup>
+                      </div>
+
+                      <Separator orientation="vertical" className="h-6" />
+
+                      {/* Sort */}
+                      <Select
+                        value={`${state.sortBy}-${state.sortOrder}`}
+                        onValueChange={(value) => {
+                          const [sortBy, sortOrder] = value.split("-")
+                          updateState({ sortBy, sortOrder: sortOrder as "asc" | "desc" })
+                        }}
+                      >
+                        <SelectTrigger className="w-48">
+                          <ArrowUpDown className="h-4 w-4 mr-2" />
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="originalDate-desc">Fecha original ↓</SelectItem>
+                          <SelectItem value="originalDate-asc">Fecha original ↑</SelectItem>
+                          <SelectItem value="dateCompleted-desc">Fecha completado ↓</SelectItem>
+                          <SelectItem value="dateCompleted-asc">Fecha completado ↑</SelectItem>
+                          <SelectItem value="processName-asc">Proceso A-Z</SelectItem>
+                          <SelectItem value="processName-desc">Proceso Z-A</SelectItem>
+                          <SelectItem value="size-desc">Tamaño ↓</SelectItem>
+                          <SelectItem value="size-asc">Tamaño ↑</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">
-                        {Object.keys(historicalFilters).length > 1
-                          ? "Sin resultados para los filtros aplicados"
-                          : "Este cliente no tiene procesos históricos"}
-                      </p>
+                  </div>
+
+                  {/* Filter chips */}
+                  {getActiveFilters().length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {getActiveFilters().map((filter, index) => (
+                        <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                          {filter.label}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-4 w-4 p-0 hover:bg-transparent"
+                            onClick={() => removeFilter(filter.type, filter.value)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </Badge>
+                      ))}
                     </div>
                   )}
+
+                  {/* Selection actions */}
+                  {selectedDocuments.size > 0 && (
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                      <span className="text-sm font-medium">
+                        {selectedDocuments.size} documento{selectedDocuments.size !== 1 ? "s" : ""} seleccionado
+                        {selectedDocuments.size !== 1 ? "s" : ""}
+                      </span>
+                      <div className="flex items-center gap-2 ml-auto">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={downloadSelectedAsZip}
+                          className="flex items-center gap-1 bg-transparent"
+                        >
+                          <Archive className="h-4 w-4" />
+                          Descargar ZIP
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copySelectedUrls}
+                          className="flex items-center gap-1 bg-transparent"
+                        >
+                          <Copy className="h-4 w-4" />
+                          Copiar enlaces
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={clearSelection} className="flex items-center gap-1">
+                          <Trash2 className="h-4 w-4" />
+                          Limpiar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Document Explorer Body */}
+                <div className="flex-1 overflow-hidden flex">
+                  {/* Process Selector Sidebar */}
+                  <div className="w-80 flex-shrink-0 hidden lg:block border-r">
+                    <ProcessSelector
+                      processes={documentExplorerProcesses}
+                      selectedProcesses={filters.selectedProcesses}
+                      selectedMonths={filters.selectedMonths}
+                      onProcessSelect={handleProcessSelect}
+                      onMonthSelect={handleMonthSelect}
+                      onSelectAll={selectAllDocuments}
+                      onClearAll={handleClearAllSelections}
+                    />
+                  </div>
+
+                  {/* Document List */}
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    {isLoadingDocuments ? (
+                      <div className="flex justify-center items-center h-32">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                      </div>
+                    ) : documents.length > 0 ? (
+                      <div className="flex-1 overflow-auto p-4">
+                        {state.viewMode === "cards" ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {documents.map((document) => (
+                              <DocumentCard
+                                key={document.id}
+                                document={document}
+                                isSelected={selectedDocuments.has(document.id)}
+                                onSelect={toggleDocumentSelection}
+                                onPreview={handleDocumentPreview}
+                                onDownload={(doc) => handleDownloadHistoricalFile(doc.id, doc.fileName)}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <DataTable columns={documentTableColumns} data={documents} hideSearchInput={true} />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center">
+                          <Archive className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No hay documentos</h3>
+                          <p className="text-gray-500">
+                            {getActiveFilters().length > 0
+                              ? "No se encontraron documentos con los filtros aplicados"
+                              : "Este cliente no tiene documentos históricos"}
+                          </p>
+                          {previewError && (
+                            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <p className="text-sm text-red-600 mb-2">{previewError}</p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRetryPreview}
+                                className="flex items-center gap-1 bg-transparent"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                                Reintentar
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
@@ -755,15 +1182,16 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         </DialogContent>
       </Dialog>
 
-      {/* Modal del visor de documentos */}
+      {/* Document Viewer Modal */}
       <DocumentViewerModal
         isOpen={isDocumentViewerOpen}
         onClose={() => setIsDocumentViewerOpen(false)}
-        documentUrl={documentUrl}
+        documentUrl={previewUrl || documentUrl}
         documentType={documentType}
         title={documentTitle}
         fileName={fileName}
         onDownload={handleDownloadDocument}
+        isLoading={isLoadingDocument || isLoadingPreview}
       />
     </>
   )
