@@ -40,6 +40,28 @@ export interface Process {
   file?: FileInfo
 }
 
+// Tax indicator status type
+export type TaxIndicatorStatus = "green" | "yellow" | "red" | "gray"
+
+// Tax indicator interface
+export interface TaxIndicator {
+  id: string
+  name: string
+  shortName: string
+  status: TaxIndicatorStatus
+  dueDate?: string
+  fileId?: string
+}
+
+// Monthly report interface
+export interface MonthlyReport {
+  id: string
+  month: string
+  year: number
+  date: string
+  clientId: string
+}
+
 // Actualizo la interfaz Client para incluir el regimenFiscalId
 export interface Client {
   id: string
@@ -80,6 +102,8 @@ export interface Client {
       }
     | string
   isAssigned?: boolean
+  taxIndicators?: TaxIndicator[]
+  monthlyReports?: MonthlyReport[]
   createdAt: string
   updatedAt: string
 }
