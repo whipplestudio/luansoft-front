@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Eye, Download, FileText, Loader2, Calendar, Building2, User, Mail, Phone, Clock, CheckCircle2, AlertCircle, XCircle, MinusCircle } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
 import { MonthlyReportsModal } from "@/components/MonthlyReportsModal"
 import { axiosInstance } from "@/lib/axios"
+import axios from "axios"
 import { toast } from "sonner"
 import type { Client, TaxIndicator, TaxIndicatorStatus } from "@/types"
 
@@ -19,6 +21,8 @@ interface ClienteDetailModalProps {
   isOpen: boolean
   onClose: () => void
   client: Client | null | undefined
+  contalinkData?: ContalinkCompany | null // Datos precargados desde el listado
+  contalinkFilters?: { year: number; month: number } // Filtros usados en el listado
 }
 
 // Interfaz para la respuesta de la API de URL de descarga
@@ -31,7 +35,47 @@ interface DownloadUrlResponse {
   }
 }
 
-export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailModalProps) {
+// Interfaces para la respuesta de Contalink
+interface ContalinkFile {
+  numeroOperacion: string
+  lineaCaptura: string
+  tipoDeclaracion: string
+  tipoComplementaria: string
+  fechaPresentacion: string
+  tipoDocumento: string
+  periodo: string
+  filePath: string
+  downloadUrl: string
+}
+
+interface ContalinkObligation {
+  column: string
+  status: 'white' | 'gray' | 'green'
+  archivos?: ContalinkFile[]
+}
+
+interface ContalinkCompany {
+  nombre: string
+  rfc: string
+  obligaciones: ContalinkObligation[]
+}
+
+interface ContalinkResponse {
+  success: boolean
+  message: string
+  errorCode: string | null
+  data: {
+    success: boolean
+    totalCompanies: number
+    filters: {
+      year: number | string
+      month: number | string
+    }
+    data: ContalinkCompany[]
+  }
+}
+
+export function ClienteDetailModal({ isOpen, onClose, client, contalinkData: preloadedContalinkData, contalinkFilters }: ClienteDetailModalProps) {
   const [documentUrl, setDocumentUrl] = useState<string | null>(null)
   const [documentType, setDocumentType] = useState<"pdf" | "image">("image")
   const [documentTitle, setDocumentTitle] = useState<string>("")
@@ -43,34 +87,85 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadingFileName, setDownloadingFileName] = useState("")
+  const [contalinkData, setContalinkData] = useState<ContalinkCompany | null>(null)
+  const [isLoadingContalink, setIsLoadingContalink] = useState(false)
+
+  // Función para obtener las obligaciones con archivos de un cliente específico
+  const fetchContalinkObligations = useCallback(async () => {
+    if (!client?.company) {
+      toast.warning('El cliente no tiene nombre de empresa registrado')
+      return
+    }
+
+    try {
+      setIsLoadingContalink(true)
+      
+      // Usar los filtros del listado si existen, sino usar fecha actual
+      const year = contalinkFilters?.year || new Date().getFullYear()
+      const month = contalinkFilters?.month || (new Date().getMonth() + 1)
+
+      // Llamar al nuevo endpoint que filtra por nombre del cliente
+      const response = await axiosInstance.post(
+        '/contalink/scrape-client-obligations',
+        {
+          clientName: client.company,
+          year: year,
+          month: month
+        }
+      )
+
+      // La respuesta tiene triple anidamiento: response.data.data.data
+      if (response.data?.data?.success && response.data.data.data) {
+        setContalinkData(response.data.data.data)
+        toast.success(`Obligaciones cargadas: ${response.data.data.data.nombre}`)
+      } else {
+        setContalinkData(null)
+        toast.error(response.data?.data?.message || `No se encontraron datos para: ${client?.company}`)
+      }
+    } catch (error: any) {
+      console.error('Error al obtener obligaciones de Contalink:', error)
+      toast.error('Error al cargar las obligaciones fiscales')
+    } finally {
+      setIsLoadingContalink(false)
+    }
+  }, [client?.company, client, contalinkFilters])
+
+  // Fetch Contalink data when modal opens
+  // Siempre llama a la API para obtener datos completos (estados + archivos) del cliente específico
+  useEffect(() => {
+    if (isOpen && client?.company) {
+      // Llamar API para obtener obligaciones y archivos de este cliente
+      fetchContalinkObligations()
+    } else if (isOpen && !client?.company) {
+      // No hay nombre de empresa, limpiar estado
+      setContalinkData(null)
+    }
+  }, [isOpen, client?.company, fetchContalinkObligations])
 
   if (!client) return null
 
-  // Dummy tax indicators data - replace with real data from API
-  const taxIndicators: TaxIndicator[] = [
-    { id: "1", name: "Cuotas Obrero Patronales", shortName: "Cuotas Obrero Patr", status: "green" },
-    { id: "2", name: "Declaración provisional de IVA", shortName: "Dec Prov IVA", status: "yellow" },
-    { id: "3", name: "IVA Definitivo Mensual", shortName: "IVA Def Mens", status: "green" },
-    { id: "4", name: "Entero Retenciones Mensuales ISR Salarios y Servicios", shortName: "Ent Ret Mens ISR SyS", status: "red" },
-    { id: "5", name: "Declaración Anual ISR Ejercicio PM", shortName: "Dec Anu ISR Ejerc PM", status: "green" },
-    { id: "6", name: "ISR Provisional Mensual PM Régimen General", shortName: "ISR Prov Mens PM RG", status: "yellow" },
-    { id: "7", name: "Declaración anual de ISR. Personas Físicas", shortName: "Dec Anu ISR PF", status: "green" },
-    { id: "8", name: "Declaración Informativa IVA con ISR", shortName: "Dec Inf IVA con ISR", status: "gray" },
-    { id: "9", name: "ISR Provisional Mensual SP RAEP", shortName: "ISR Prov Mens SP RAEP", status: "green" },
-    { id: "10", name: "Entero Retenciones Mensuales IVA", shortName: "Ent Ret Mens IVA", status: "yellow" },
-    { id: "11", name: "ISR Provisional Mensual AE RAEP", shortName: "ISR Prov Mens AE RAEP", status: "green" },
-    { id: "12", name: "Pago provisional mensual de ISR. RSC", shortName: "ISR Prov Mens RSC", status: "red" },
-    { id: "13", name: "Pago definitivo mensual de IVA. RSC", shortName: "IVA Def Mens RSC", status: "green" },
-    { id: "14", name: "Entero mensual retenciones ISR arrendamiento", shortName: "Ent Ret Mens ISR IAS", status: "yellow" },
-    { id: "15", name: "IEPS Chatarra Mensual", shortName: "IEPS Chatarra Mens", status: "gray" },
-    { id: "16", name: "Dec Inf 50 principales clientes IEPS", shortName: "Dec Inf IEPS 50", status: "green" },
-    { id: "17", name: "Dec Inf anual bienes producidos", shortName: "Dec Inf Bienes Anu", status: "green" },
-    { id: "18", name: "Declaración informativa de IEPS trasladado", shortName: "Dec Inf IEPS Trasl", status: "gray" },
-    { id: "19", name: "Pago provisional trimestral ISR PM inicio segundo", shortName: "ISR Prov Trim PM", status: "yellow" },
-    { id: "20", name: "ISR Anual Ajuste RSC", shortName: "ISR Anu Ajust RSC", status: "green" },
-    { id: "21", name: "Entero ISR sobre dividendos distribuidos PM", shortName: "ISR Dividendos PM", status: "green" },
-    { id: "22", name: "Declaración anual ISR RSC PM", shortName: "Dec Anu ISR RSC PM", status: "red" },
-  ]
+  // Mapear los datos de Contalink al formato de TaxIndicator
+  const mapStatusToTaxIndicatorStatus = (status: 'white' | 'gray' | 'green'): TaxIndicatorStatus => {
+    switch (status) {
+      case 'green':
+        return 'green'
+      case 'gray':
+        return 'gray'
+      case 'white':
+        return 'red' // white en Contalink significa pendiente/sin presentar
+      default:
+        return 'gray'
+    }
+  }
+
+  // Convertir obligaciones de Contalink a TaxIndicators
+  const taxIndicators: TaxIndicator[] = contalinkData?.obligaciones?.map((obl, index) => ({
+    id: String(index + 1),
+    name: obl.column,
+    shortName: obl.column.length > 45 ? obl.column.substring(0, 42) + '...' : obl.column,
+    status: mapStatusToTaxIndicatorStatus(obl.status),
+    files: obl.archivos
+  })) || []
 
   // Get status color for traffic light with gradient
   const getStatusColor = (status: TaxIndicatorStatus): string => {
@@ -106,28 +201,59 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
 
   // Handle tax indicator click - download PDF with progress
   const handleTaxIndicatorClick = async (indicator: TaxIndicator) => {
-    setDownloadingFileName(`${indicator.shortName}.pdf`)
+    // Verificar si hay archivos para descargar
+    if (!indicator.files || indicator.files.length === 0) {
+      toast.info(`${indicator.shortName} no tiene archivos disponibles`)
+      return
+    }
+
+    // Por ahora descargamos el primer archivo (si hay múltiples, podríamos mostrar un modal)
+    const archivo = indicator.files[0]
+    const fileName = archivo.downloadUrl.split('/').pop() || `${indicator.shortName}.pdf`
+    
+    setDownloadingFileName(fileName)
     setDownloadProgress(0)
     setIsDownloading(true)
     
     try {
-      // Simulate download progress - replace with real API call
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 150))
-        setDownloadProgress(i)
+      // Construir URL completa del archivo (sin /api)
+      // Los archivos estáticos se sirven desde /downloads directamente, sin /api
+      let backendBaseUrl: string
+      
+      if (process.env.NEXT_PUBLIC_API_URL) {
+        backendBaseUrl = process.env.NEXT_PUBLIC_API_URL.replace('/api', '')
+      } else {
+        // Fallback para desarrollo local
+        backendBaseUrl = 'http://localhost:3002'
       }
       
-      // In production, download the actual file from API
-      // const response = await axiosInstance.get(`/tax-indicators/${indicator.id}/download`, {
-      //   responseType: 'blob',
-      //   onDownloadProgress: (progressEvent) => {
-      //     const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1))
-      //     setDownloadProgress(percentCompleted)
-      //   }
-      // })
+      const fileUrl = `${backendBaseUrl}${archivo.downloadUrl}`
+      
+      // Descargar el archivo desde el backend usando axios sin baseURL
+      const response = await axios.get(fileUrl, {
+        responseType: 'blob',
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        },
+        onDownloadProgress: (progressEvent: any) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1))
+          setDownloadProgress(percentCompleted)
+        }
+      })
+      
+      // Crear un blob y descargarlo
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
       
       toast.success(`${indicator.shortName} descargado exitosamente`)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al descargar:", error)
       toast.error(`Error al descargar ${indicator.shortName}`)
     } finally {
@@ -475,60 +601,62 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
               </div>
             </CardHeader>
             <CardContent className="p-5">
-              <div className="overflow-x-auto pb-2">
-                <div className="min-w-fit">
-                  {/* First row of indicators */}
-                  <div className="flex gap-2 mb-4">
-                    {taxIndicators.slice(0, 11).map((indicator, index) => (
-                      <div key={indicator.id} className="flex flex-col items-center gap-1.5" style={{ animationDelay: `${index * 50}ms` }}>
-                        <button
-                          onClick={() => handleTaxIndicatorClick(indicator)}
-                          className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center",
-                            getStatusColor(indicator.status),
-                            "hover:scale-110 hover:shadow-lg hover:-translate-y-1",
-                            "transition-all duration-300 ease-out cursor-pointer",
-                            "border-2 border-white/50 shadow-md",
-                            "group relative"
-                          )}
-                          title={indicator.name}
-                          aria-label={indicator.name}
-                        >
-                          <Download className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                        </button>
-                        <span className="text-[9px] text-gray-600 font-medium text-center leading-tight max-w-[52px] truncate" title={indicator.shortName}>
-                          {indicator.shortName}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Second row of indicators */}
-                  <div className="flex gap-2">
-                    {taxIndicators.slice(11, 22).map((indicator, index) => (
-                      <div key={indicator.id} className="flex flex-col items-center gap-1.5" style={{ animationDelay: `${(index + 11) * 50}ms` }}>
-                        <button
-                          onClick={() => handleTaxIndicatorClick(indicator)}
-                          className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center",
-                            getStatusColor(indicator.status),
-                            "hover:scale-110 hover:shadow-lg hover:-translate-y-1",
-                            "transition-all duration-300 ease-out cursor-pointer",
-                            "border-2 border-white/50 shadow-md",
-                            "group relative"
-                          )}
-                          title={indicator.name}
-                          aria-label={indicator.name}
-                        >
-                          <Download className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                        </button>
-                        <span className="text-[9px] text-gray-600 font-medium text-center leading-tight max-w-[52px] truncate" title={indicator.shortName}>
-                          {indicator.shortName}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+              {isLoadingContalink ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                  <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+                  <p className="text-sm text-gray-600">Cargando indicadores fiscales desde Contalink...</p>
                 </div>
-              </div>
+              ) : (
+                taxIndicators.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-4">
+                    <AlertCircle className="h-10 w-10 text-gray-400" />
+                    <p className="text-sm text-gray-600">No se encontraron indicadores fiscales para este cliente</p>
+                    <p className="text-xs text-gray-500">Verifica que el nombre de la empresa coincida con Contalink o que tenga datos en el mes/año seleccionado</p>
+                  </div>
+                ) : (
+                  <TooltipProvider>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                      {taxIndicators.map((indicator, index) => (
+                        <Tooltip key={indicator.id} delayDuration={200}>
+                          <TooltipTrigger asChild>
+                            <div className="flex flex-col items-center gap-2" style={{ animationDelay: `${index * 30}ms` }}>
+                              <button
+                                onClick={() => handleTaxIndicatorClick(indicator)}
+                                className={cn(
+                                  "w-14 h-14 rounded-xl flex items-center justify-center",
+                                  getStatusColor(indicator.status),
+                                  "hover:scale-105 hover:shadow-xl hover:-translate-y-0.5",
+                                  "transition-all duration-200 ease-out cursor-pointer",
+                                  "border-2 border-white/50 shadow-md",
+                                  "group relative"
+                                )}
+                                aria-label={indicator.name}
+                              >
+                                {indicator.files && indicator.files.length > 0 ? (
+                                  <Download className="h-5 w-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                                ) : (
+                                  <FileText className="h-5 w-5 text-white/50" />
+                                )}
+                              </button>
+                              <span className="text-[10px] text-gray-600 font-medium text-center leading-tight max-w-full line-clamp-2 px-1">
+                                {indicator.shortName}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="font-semibold text-sm">{indicator.name}</p>
+                            {indicator.files && indicator.files.length > 0 && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                {indicator.files.length} archivo{indicator.files.length > 1 ? 's' : ''} disponible{indicator.files.length > 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </TooltipProvider>
+                )
+              )}
             </CardContent>
           </Card>
 

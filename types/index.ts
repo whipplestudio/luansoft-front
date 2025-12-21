@@ -43,6 +43,19 @@ export interface Process {
 // Tax indicator status type
 export type TaxIndicatorStatus = "green" | "yellow" | "red" | "gray"
 
+// Contalink file interface
+export interface ContalinkFile {
+  numeroOperacion: string
+  lineaCaptura: string
+  tipoDeclaracion: string
+  tipoComplementaria: string
+  fechaPresentacion: string
+  tipoDocumento: string
+  periodo: string
+  filePath: string
+  downloadUrl: string
+}
+
 // Tax indicator interface
 export interface TaxIndicator {
   id: string
@@ -51,6 +64,7 @@ export interface TaxIndicator {
   status: TaxIndicatorStatus
   dueDate?: string
   fileId?: string
+  files?: ContalinkFile[] // Archivos de Contalink para obligaciones verdes
 }
 
 // Monthly report interface

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { MoreHorizontal, PlusCircle, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,10 @@ import axios from "axios"
 import type { Client } from "@/types"
 import { hasPermission, type RoleType } from "@/lib/permissions"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
+import { RefreshCw, Calendar } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Card } from "@/components/ui/card"
 
 // Actualizar la interfaz ApiClient para reflejar la nueva estructura
 interface ApiClient {
@@ -115,6 +119,15 @@ export default function ClientesPage() {
   const [contactos, setContactos] = useState<any[]>([])
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
+  
+  // Estados para Contalink
+  const [contalinkData, setContalinkData] = useState<any[]>([])
+  const [isLoadingContalink, setIsLoadingContalink] = useState(false)
+  const [contalinkYear, setContalinkYear] = useState(new Date().getFullYear().toString())
+  const [contalinkMonth, setContalinkMonth] = useState((new Date().getMonth() + 1).toString())
+  
+  // Ref para evitar llamadas duplicadas en React Strict Mode
+  const contalinkInitialized = useRef(false)
 
   interface ContactosResponse {
     success: boolean
@@ -206,10 +219,69 @@ export default function ClientesPage() {
     setCurrentPage(1)
   }
 
+  // Función para verificar existencia en Contalink (sin descargar archivos)
+  const fetchContalinkPresence = async () => {
+    try {
+      setIsLoadingContalink(true)
+      
+      const response = await axiosInstance.post('/contalink/scrape-obligations', {
+        year: parseInt(contalinkYear),
+        month: parseInt(contalinkMonth)
+      })
+      
+      // La respuesta tiene doble anidamiento: response.data.data.data
+      if (response.data?.data?.success && Array.isArray(response.data.data.data)) {
+        setContalinkData(response.data.data.data)
+        toast.success(`Verificación Contalink: ${response.data.data.totalCompanies} empresas encontradas`)
+      } else {
+        setContalinkData([])
+        toast.error('Formato de respuesta inesperado')
+      }
+    } catch (error: any) {
+      console.error('Error al verificar Contalink:', error)
+      toast.error('Error al verificar presencia en Contalink')
+      setContalinkData([])
+    } finally {
+      setIsLoadingContalink(false)
+    }
+  }
+
+  // Función para verificar si un cliente está en los datos de Contalink
+  const isClientInContalink = (clientName: string): boolean => {
+    if (contalinkData.length === 0) return false
+    
+    const normalizeString = (str: string) => str.trim().toUpperCase()
+    const clientNameNorm = normalizeString(clientName)
+    const clientWords = clientNameNorm.split(/\s+/).filter(w => w.length > 2)
+    
+    return contalinkData.some(company => {
+      const companyNameNorm = normalizeString(company.nombre)
+      
+      // Match exacto
+      if (companyNameNorm === clientNameNorm) return true
+      
+      // Match por inclusión
+      if (clientNameNorm.includes(companyNameNorm) || companyNameNorm.includes(clientNameNorm)) return true
+      
+      // Match por palabras
+      const companyWords = companyNameNorm.split(/\s+/).filter(w => w.length > 2)
+      const commonWords = clientWords.filter(cw => companyWords.some(cpw => cpw.includes(cw) || cw.includes(cpw)))
+      return commonWords.length >= 2
+    })
+  }
+
   // Cargar los clientes al montar el componente
   useEffect(() => {
     fetchClients()
   }, [currentPage, pageSize, sortOrder])
+
+  // Verificar presencia en Contalink al montar el componente (una sola vez)
+  useEffect(() => {
+    if (!contalinkInitialized.current) {
+      contalinkInitialized.current = true
+      fetchContalinkPresence()
+    }
+  }, [])
 
   const confirmDelete = async () => {
     if (selectedClient) {
@@ -295,6 +367,31 @@ export default function ClientesPage() {
     setIsDetailModalOpen(true)
   }
 
+  // Función para obtener los datos de Contalink de un cliente específico
+  const getContalinkDataForClient = (clientName: string): any | null => {
+    if (contalinkData.length === 0) return null
+    
+    const normalizeString = (str: string) => str.trim().toUpperCase()
+    const clientNameNorm = normalizeString(clientName)
+    const clientWords = clientNameNorm.split(/\s+/).filter(w => w.length > 2)
+    
+    // Buscar con las mismas estrategias que isClientInContalink
+    return contalinkData.find(company => {
+      const companyNameNorm = normalizeString(company.nombre)
+      
+      // Match exacto
+      if (companyNameNorm === clientNameNorm) return true
+      
+      // Match por inclusión  
+      if (clientNameNorm.includes(companyNameNorm) || companyNameNorm.includes(clientNameNorm)) return true
+      
+      // Match por palabras
+      const companyWords = companyNameNorm.split(/\s+/).filter(w => w.length > 2)
+      const commonWords = clientWords.filter(cw => companyWords.some(cpw => cpw.includes(cw) || cw.includes(cpw)))
+      return commonWords.length >= 2
+    }) || null
+  }
+
   const columns: ColumnDef<Client>[] = [
     {
       accessorKey: "company",
@@ -320,6 +417,34 @@ export default function ClientesPage() {
         return (
           <div className={`capitalize ${status === "ACTIVE" ? "text-green-600" : "text-red-600"}`}>
             {status === "ACTIVE" ? "Activo" : "Inactivo"}
+          </div>
+        )
+      },
+    },
+    {
+      id: "contalink",
+      header: "En Contalink",
+      cell: ({ row }) => {
+        const client = row.original
+        const inContalink = isClientInContalink(client.company)
+        
+        if (contalinkData.length === 0) {
+          return <div className="text-gray-400 text-sm">-</div>
+        }
+        
+        return (
+          <div className="flex items-center gap-2">
+            {inContalink ? (
+              <div className="flex items-center gap-1 text-green-600">
+                <div className="w-2 h-2 rounded-full bg-green-600"></div>
+                <span className="text-xs font-medium">Sí</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 text-gray-400">
+                <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                <span className="text-xs font-medium">No</span>
+              </div>
+            )}
           </div>
         )
       },
@@ -394,6 +519,94 @@ export default function ClientesPage() {
             )}
           </div>
         </div>
+
+        {/* Sección de consulta de Contalink */}
+        <Card className="p-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
+              <div className="space-y-2">
+                <Label htmlFor="contalink-year" className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Año
+                </Label>
+                <Select value={contalinkYear} onValueChange={setContalinkYear} disabled={isLoadingContalink}>
+                  <SelectTrigger id="contalink-year" disabled={isLoadingContalink}>
+                    <SelectValue placeholder="Seleccionar año" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const year = new Date().getFullYear() - i
+                      return (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contalink-month" className="text-sm font-medium">
+                  Mes
+                </Label>
+                <Select value={contalinkMonth} onValueChange={setContalinkMonth} disabled={isLoadingContalink}>
+                  <SelectTrigger id="contalink-month" disabled={isLoadingContalink}>
+                    <SelectValue placeholder="Seleccionar mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      { value: "1", label: "Enero" },
+                      { value: "2", label: "Febrero" },
+                      { value: "3", label: "Marzo" },
+                      { value: "4", label: "Abril" },
+                      { value: "5", label: "Mayo" },
+                      { value: "6", label: "Junio" },
+                      { value: "7", label: "Julio" },
+                      { value: "8", label: "Agosto" },
+                      { value: "9", label: "Septiembre" },
+                      { value: "10", label: "Octubre" },
+                      { value: "11", label: "Noviembre" },
+                      { value: "12", label: "Diciembre" },
+                    ].map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 sm:col-span-1">
+                <Label className="text-sm font-medium opacity-0 hidden sm:block">Acción</Label>
+                <Button 
+                  onClick={fetchContalinkPresence} 
+                  disabled={isLoadingContalink}
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+                >
+                  {isLoadingContalink ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Verificando...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Aplicar filtro Contalink
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            
+            {contalinkData.length > 0 && (
+              <div className="text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-lg">
+                <span className="font-semibold text-blue-700">{contalinkData.length}</span> empresas encontradas
+              </div>
+            )}
+          </div>
+        </Card>
+
         <DataTable
           columns={columns}
           data={contactos}
@@ -439,6 +652,8 @@ export default function ClientesPage() {
           isOpen={isDetailModalOpen}
           onClose={() => setIsDetailModalOpen(false)}
           client={selectedClient}
+          contalinkData={selectedClient ? getContalinkDataForClient(selectedClient.company) : null}
+          contalinkFilters={contalinkData.length > 0 ? { year: parseInt(contalinkYear), month: parseInt(contalinkMonth) } : undefined}
         />
       </div>
     </ProtectedRoute>
