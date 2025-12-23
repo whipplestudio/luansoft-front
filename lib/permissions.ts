@@ -11,6 +11,7 @@ export type ResourceType =
   | "regimenes-fiscales"
   | "asignar-procesos"
   | "historico-procesos"
+  | "mrm"
 
 // Define las acciones que se pueden realizar en los recursos
 export type ActionType = "view" | "create" | "edit" | "delete"
@@ -33,6 +34,7 @@ const PERMISSIONS: Record<RoleType, RolePermissions> = {
     usuarios: { view: true, create: true, edit: true, delete: true },
     contadores: { view: true, create: true, edit: true, delete: true },
     clientes: { view: true, create: true, edit: true, delete: true },
+    mrm : { view: true, create: true, edit: true, delete: true },
     contactos: { view: true, create: true, edit: true, delete: true },
     "asignacion-contadores": { view: true, create: true, edit: true, delete: true },
     "asignacion-contactos": { view: true, create: true, edit: true, delete: true },
@@ -47,6 +49,7 @@ const PERMISSIONS: Record<RoleType, RolePermissions> = {
     usuarios: { view: false, create: false, edit: false, delete: false },
     contadores: { view: true, create: false, edit: false, delete: false },
     clientes: { view: true, create: true, edit: true, delete: true },
+    mrm: { view: true, create: true, edit: true, delete: true },
     contactos: { view: false, create: false, edit: false, delete: false },
     "asignacion-contadores": { view: true, create: false, edit: false, delete: false },
     "asignacion-contactos": { view: true, create: true, edit: true, delete: true },
@@ -58,6 +61,7 @@ const PERMISSIONS: Record<RoleType, RolePermissions> = {
   contacto: {
     // Permisos para el rol de contacto según los nuevos requisitos
     dashboard: { view: true, create: false, edit: false, delete: false },
+    mrm: { view: true, create: true, edit: true, delete: true },
     usuarios: { view: false, create: false, edit: false, delete: false },
     contadores: { view: false, create: false, edit: false, delete: false },
     clientes: { view: false, create: false, edit: false, delete: false },
@@ -72,6 +76,7 @@ const PERMISSIONS: Record<RoleType, RolePermissions> = {
   dashboard: {
     // Permisos para el rol dashboard
     dashboard: { view: true, create: false, edit: false, delete: false },
+    mrm: { view: true, create: true, edit: true, delete: true },
     usuarios: { view: false, create: false, edit: false, delete: false },
     contadores: { view: false, create: false, edit: false, delete: false },
     clientes: { view: false, create: false, edit: false, delete: false },
