@@ -215,6 +215,29 @@ export function ClienteDetailModal({ isOpen, onClose, client, contalinkData: pre
     }
   }
 
+  // Función para previsualizar archivos de Contalink
+  const handlePreviewContalinkFile = async (file: ContalinkFile, fileName?: string) => {
+    if (!file.downloadUrl) {
+      toast.error('URL de descarga no disponible')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      // Usar la presigned URL directamente para la vista previa
+      setDocumentUrl(file.downloadUrl)
+      setDocumentType('pdf')
+      setDocumentTitle(fileName || file.tipoDeclaracion || file.numeroOperacion)
+      setFileName(fileName ? `${fileName}.pdf` : `${file.numeroOperacion}.pdf`)
+      setIsDocumentViewerOpen(true)
+    } catch (error: any) {
+      console.error('Error al previsualizar archivo:', error)
+      toast.error('Error al previsualizar el archivo')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Función para descargar archivos de Contalink
   const handleDownloadContalinkFile = async (file: ContalinkFile, fileName?: string) => {
     if (!file.downloadUrl) {
@@ -824,26 +847,42 @@ export function ClienteDetailModal({ isOpen, onClose, client, contalinkData: pre
                           {contalinkData.archivosIconos.length}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {contalinkData.archivosIconos.map((archivo, index) => (
-                          <button
+                          <div
                             key={index}
-                            onClick={() => handleDownloadContalinkFile(archivo, getIconName(archivo.tipoDocumento))}
-                            disabled={isDownloading}
                             className={cn(
-                              "group relative p-4 rounded-xl border-2 border-transparent",
+                              "group relative p-4 rounded-xl border-2 border-gray-200",
                               `bg-gradient-to-br ${getIconColor(archivo.tipoDocumento)}`,
-                              "hover:scale-105 hover:shadow-xl transition-all duration-200",
-                              "flex flex-col items-center gap-2 text-white",
-                              "disabled:opacity-50 disabled:cursor-not-allowed"
+                              "hover:shadow-xl transition-all duration-200",
+                              "flex items-center gap-3 text-white"
                             )}
                           >
-                            <FileText className="h-8 w-8" />
-                            <span className="text-xs font-semibold text-center">
+                            <FileText className="h-8 w-8 flex-shrink-0" />
+                            <span className="text-sm font-semibold flex-1">
                               {getIconName(archivo.tipoDocumento)}
                             </span>
-                            <Download className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2" />
-                          </button>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handlePreviewContalinkFile(archivo, getIconName(archivo.tipoDocumento))}
+                                disabled={isDownloading || isLoading}
+                                className="bg-white/90 hover:bg-white text-gray-700 hover:text-gray-900 h-8 px-3"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleDownloadContalinkFile(archivo, getIconName(archivo.tipoDocumento))}
+                                disabled={isDownloading || isLoading}
+                                className="bg-white/90 hover:bg-white text-gray-700 hover:text-gray-900 h-8 px-3"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -881,15 +920,26 @@ export function ClienteDetailModal({ isOpen, onClose, client, contalinkData: pre
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDownloadContalinkFile(archivo)}
-                              disabled={isDownloading}
-                              className="flex-shrink-0 hover:bg-indigo-100 hover:text-indigo-700"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handlePreviewContalinkFile(archivo)}
+                                disabled={isDownloading || isLoading}
+                                className="hover:bg-blue-100 hover:text-blue-700"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDownloadContalinkFile(archivo)}
+                                disabled={isDownloading || isLoading}
+                                className="hover:bg-indigo-100 hover:text-indigo-700"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
