@@ -39,6 +39,7 @@ interface ApiClient {
   payroll: boolean
   payrollFrequencies: string[]
   regimenFiscalId: string
+  rfc?: string | null
   isContractSigned: boolean
   contractFile: {
     id: string
@@ -398,6 +399,14 @@ export default function ClientesPage() {
       header: "Empresa",
     },
     {
+      accessorKey: "rfc",
+      header: "RFC",
+      cell: ({ row }) => {
+        const rfc = row.original.rfc
+        return <div>{rfc || <span className="text-gray-400">-</span>}</div>
+      },
+    },
+    {
       accessorKey: "type",
       header: "Tipo",
       cell: ({ row }) => {
@@ -417,34 +426,6 @@ export default function ClientesPage() {
         return (
           <div className={`capitalize ${status === "ACTIVE" ? "text-green-600" : "text-red-600"}`}>
             {status === "ACTIVE" ? "Activo" : "Inactivo"}
-          </div>
-        )
-      },
-    },
-    {
-      id: "contalink",
-      header: "En Contalink",
-      cell: ({ row }) => {
-        const client = row.original
-        const inContalink = isClientInContalink(client.company)
-        
-        if (contalinkData.length === 0) {
-          return <div className="text-gray-400 text-sm">-</div>
-        }
-        
-        return (
-          <div className="flex items-center gap-2">
-            {inContalink ? (
-              <div className="flex items-center gap-1 text-green-600">
-                <div className="w-2 h-2 rounded-full bg-green-600"></div>
-                <span className="text-xs font-medium">Sí</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-gray-400">
-                <div className="w-2 h-2 rounded-full bg-gray-300"></div>
-                <span className="text-xs font-medium">No</span>
-              </div>
-            )}
           </div>
         )
       },

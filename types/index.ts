@@ -83,6 +83,7 @@ export interface Client {
   type: "FISICA" | "MORAL"
   status: "ACTIVE" | "INACTIVE"
   regimenFiscalId: string
+  rfc?: string | null
   isContractSigned?: boolean
   contractFile?: {
     id: string
