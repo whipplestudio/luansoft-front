@@ -3,7 +3,7 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { X } from "lucide-react"
-import { ReportContent } from "@/components/contpaq-data/ReportContent"
+import { ReportContentDynamic } from "@/components/contpaq-data/ReportContentDynamic"
 
 interface ReportModalProps {
   isOpen: boolean
@@ -29,7 +29,7 @@ export function ReportModal({ isOpen, onClose, clientId, month, year }: ReportMo
         </div>
 
         <div className="w-full h-full overflow-y-auto">
-          <ReportContent clientId={clientId} month={month} year={year} />
+          <ReportContentDynamic clientId={clientId} month={month} year={year} />
         </div>
       </DialogContent>
     </Dialog>

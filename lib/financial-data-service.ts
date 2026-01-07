@@ -13,13 +13,59 @@ const CLIENTS_MAP: Record<string, string> = {
   luengas: "Jose Manuel Luengas",
 }
 
+// Mapeo inverso: de nombre de cliente a slug de archivo
+function getClientSlugFromName(clientName: string): string | null {
+  const normalizedName = clientName.trim().toLowerCase()
+  
+  // Buscar coincidencia exacta primero
+  for (const [slug, name] of Object.entries(CLIENTS_MAP)) {
+    if (name.toLowerCase() === normalizedName) {
+      return slug
+    }
+  }
+  
+  // Buscar coincidencia parcial (contiene el nombre)
+  for (const [slug, name] of Object.entries(CLIENTS_MAP)) {
+    if (normalizedName.includes(name.toLowerCase()) || name.toLowerCase().includes(normalizedName)) {
+      return slug
+    }
+  }
+  
+  // Casos especiales comunes
+  const specialCases: Record<string, string> = {
+    "mrm ingeniería integral": "mrm",
+    "mrm ingenieria integral": "mrm",
+    "jose manuel luengas": "luengas",
+    "josé manuel luengas": "luengas",
+    "soluciones whipple": "whipple",
+    "leret leret": "leret",
+  }
+  
+  if (specialCases[normalizedName]) {
+    return specialCases[normalizedName]
+  }
+  
+  return null
+}
+
 export async function loadClientFinancialData(
   clientId: string
 ): Promise<ClienteFinancialData | null> {
   try {
-    const response = await fetch(`/data/clients/${clientId}.json`)
+    // Intentar normalizar el clientId (podría ser nombre o slug)
+    let slug = clientId.toLowerCase().trim()
+    
+    // Si no existe en CLIENTS_MAP, intentar convertir de nombre a slug
+    if (!CLIENTS_MAP[slug]) {
+      const foundSlug = getClientSlugFromName(clientId)
+      if (foundSlug) {
+        slug = foundSlug
+      }
+    }
+    
+    const response = await fetch(`/data/clients/${slug}.json`)
     if (!response.ok) {
-      console.error(`Failed to load data for client: ${clientId}`)
+      console.error(`Failed to load data for client: ${clientId} (using slug: ${slug})`)
       return null
     }
     const data: ClienteFinancialData = await response.json()

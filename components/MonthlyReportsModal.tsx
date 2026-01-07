@@ -58,6 +58,24 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
     setIsReportModalOpen(true)
   }
 
+  const convertMonthNameToNumber = (monthName: string): string => {
+    const monthMap: Record<string, string> = {
+      Enero: "01",
+      Febrero: "02",
+      Marzo: "03",
+      Abril: "04",
+      Mayo: "05",
+      Junio: "06",
+      Julio: "07",
+      Agosto: "08",
+      Septiembre: "09",
+      Octubre: "10",
+      Noviembre: "11",
+      Diciembre: "12",
+    }
+    return monthMap[monthName] || "01"
+  }
+
   const handleCloseReportModal = () => {
     setIsReportModalOpen(false)
     setSelectedReport(null)
@@ -106,8 +124,8 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
         <ReportModal
           isOpen={isReportModalOpen}
           onClose={handleCloseReportModal}
-          clientId={clientId}
-          month={selectedReport.month}
+          clientId={clientName}
+          month={`${selectedReport.year}-${convertMonthNameToNumber(selectedReport.month)}`}
           year={selectedReport.year}
         />
       )}
