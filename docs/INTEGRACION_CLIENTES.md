@@ -256,3 +256,102 @@ Para actualizar datos cuando lleguen nuevos PDFs:
 ✅ Servicio de datos completo  
 ✅ Cálculos financieros automatizados  
 ✅ Sistema completamente integrado  
+
+---
+
+## 🏠 Dashboard de Cliente Integrado
+
+### Ubicación: `/app/dashboard/page.tsx`
+
+Cuando un usuario con rol **"contacto"** inicia sesión, es automáticamente redirigido a su dashboard personal que muestra:
+
+### **📊 Características del Dashboard:**
+
+#### 1. **KPIs Principales** (Tarjetas superiores)
+- ✅ **Ingresos del Mes** - Último periodo disponible
+- ✅ **Utilidad del Periodo** - Resultado mensual
+- ✅ **Utilidad Acumulada** - YTD del año
+- ✅ **Activo Circulante** - Balance General
+
+#### 2. **Resumen Ejecutivo**
+- Estado de Resultados (Ingresos, Compras, Gastos, Utilidad)
+- Balance General (AC, PC, Bancos, Capital de Trabajo)
+- Periodo más reciente disponible
+
+#### 3. **Acceso a Reportes Mensuales**
+- Botón para abrir `MonthlyReportsModal`
+- Visualización de todos los meses disponibles
+- Reportes completos con KPIs calculados
+
+#### 4. **Datos Disponibles**
+- Listado de años con datos
+- Cantidad de meses por año
+
+### **🔄 Flujo de Autenticación y Redirección:**
+
+```typescript
+// Usuario con rol "contacto" inicia sesión
+1. Login exitoso → localStorage.setItem("userRole", "contacto")
+
+2. clientLayout detecta rol y redirige:
+   - Si pathname === "/" → redirect("/dashboard")
+   - Si pathname === "/login" → redirect("/dashboard")
+
+3. Dashboard carga:
+   - user = localStorage.getItem("user")
+   - company = user.client?.company || user.company
+   - loadClientFinancialData(company)
+
+4. Datos se normalizan automáticamente:
+   - "MRM Ingeniería Integral" → mrm.json
+   - "Luenser" → luenser.json
+   - etc.
+```
+
+### **📁 Estructura de Usuario Contacto:**
+
+```json
+{
+  "id": "uuid-contacto",
+  "firstName": "Juan",
+  "lastName": "Pérez",
+  "email": "juan@empresa.com",
+  "role": "contacto",
+  "client": {
+    "id": "uuid-cliente",
+    "company": "MRM Ingeniería Integral"
+  }
+}
+```
+
+### **🎯 Beneficios de la Integración:**
+
+✅ **Un solo perfil unificado** - El cliente ve sus datos financieros directamente  
+✅ **Acceso automático** - No necesita navegar, se muestra al iniciar sesión  
+✅ **Datos en tiempo real** - Carga desde JSON actualizado  
+✅ **Navegación simplificada** - Todo desde un dashboard central  
+✅ **Experiencia personalizada** - Muestra solo los datos del cliente autenticado  
+
+### **🔐 Seguridad:**
+
+- Solo usuarios con `userRole === "contacto"` pueden acceder
+- Verifica autenticación en localStorage
+- Redirige a login si no está autenticado
+- Cada contacto solo ve datos de su propia empresa
+
+### **📍 Rutas Configuradas:**
+
+| Ruta | Rol | Acción |
+|------|-----|--------|
+| `/login` | contacto | → `/dashboard` |
+| `/` | contacto | → `/dashboard` |
+| `/dashboard` | admin/contador | → `/` (no autorizado) |
+| `/dashboard` | contacto | ✅ Mostrar dashboard |
+
+**El sistema ahora integra completamente la visualización de datos financieros en el perfil del cliente autenticado.**10/10 clientes con datos  
+✅ 193 meses procesados  
+✅ Componentes genéricos implementados  
+✅ Scripts de extracción funcionando  
+✅ Servicio de datos completo  
+✅ Cálculos financieros automatizados  
+✅ Sistema completamente integrado  
