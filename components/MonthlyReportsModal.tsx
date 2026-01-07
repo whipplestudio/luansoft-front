@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { FileDown, X } from "lucide-react"
 import { useState } from "react"
 import type { MonthlyReport } from "@/types"
-import { MRMModal } from "@/components/MRMModal"
+import { ReportModal } from "@/components/contpaq-data"
 
 interface MonthlyReportsModalProps {
   isOpen: boolean
@@ -15,7 +15,7 @@ interface MonthlyReportsModalProps {
 }
 
 export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: MonthlyReportsModalProps) {
-  const [isMRMModalOpen, setIsMRMModalOpen] = useState(false)
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [selectedReport, setSelectedReport] = useState<MonthlyReport | null>(null)
 
   // Generate last 24 months of reports
@@ -53,14 +53,13 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
 
   const monthlyReports = generateMonthlyReports()
 
-  // Handle monthly report click - open MRM modal
   const handleMonthlyReportClick = (report: MonthlyReport) => {
     setSelectedReport(report)
-    setIsMRMModalOpen(true)
+    setIsReportModalOpen(true)
   }
 
-  const handleCloseMRMModal = () => {
-    setIsMRMModalOpen(false)
+  const handleCloseReportModal = () => {
+    setIsReportModalOpen(false)
     setSelectedReport(null)
   }
 
@@ -103,11 +102,10 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
         </div>
       </DialogContent>
 
-      {/* MRM Modal */}
       {selectedReport && (
-        <MRMModal
-          isOpen={isMRMModalOpen}
-          onClose={handleCloseMRMModal}
+        <ReportModal
+          isOpen={isReportModalOpen}
+          onClose={handleCloseReportModal}
           clientId={clientId}
           month={selectedReport.month}
           year={selectedReport.year}

@@ -58,3 +58,6 @@ Valoramos sus comentarios y revisamos regularmente todas las sugerencias para fu
 ---
 
 *Última actualización: Abril 2025*
+
+
+ https://whipplestudio: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@github.com/whipplestudio/luansoft-front 
