@@ -2,10 +2,12 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { FileDown, X } from "lucide-react"
-import { useState } from "react"
+import { FileDown, X, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
 import type { MonthlyReport } from "@/types"
-import { MRMModal } from "@/components/MRMModal"
+import { ReportModal } from "@/components/contpaq-data"
+import { loadClientFinancialData, getMonthName } from "@/lib/financial-data-service"
+import type { ClienteFinancialData } from "@/types/financial"
 
 interface MonthlyReportsModalProps {
   isOpen: boolean
@@ -15,52 +17,85 @@ interface MonthlyReportsModalProps {
 }
 
 export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: MonthlyReportsModalProps) {
-  const [isMRMModalOpen, setIsMRMModalOpen] = useState(false)
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [selectedReport, setSelectedReport] = useState<MonthlyReport | null>(null)
+  const [isLoadingData, setIsLoadingData] = useState(false)
+  const [availableReports, setAvailableReports] = useState<MonthlyReport[]>([])
 
-  // Generate last 24 months of reports
-  const generateMonthlyReports = (): MonthlyReport[] => {
-    const reports: MonthlyReport[] = []
-    const currentDate = new Date()
-    const months = [
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-      "Septiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre",
-    ]
+  // Load client data and generate reports based on available data
+  useEffect(() => {
+    if (!isOpen) return
 
-    for (let i = 0; i < 24; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1)
-      reports.push({
-        id: `report-${i}`,
-        month: months[date.getMonth()],
-        year: date.getFullYear(),
-        date: date.toISOString(),
-        clientId: clientId,
-      })
+    const loadAvailableReports = async () => {
+      setIsLoadingData(true)
+      try {
+        const clientData: ClienteFinancialData | null = await loadClientFinancialData(clientName)
+        
+        if (!clientData) {
+          setAvailableReports([])
+          return
+        }
+
+        const reports: MonthlyReport[] = []
+        
+        // Iterate through all years in the client data
+        Object.keys(clientData.years).sort((a, b) => parseInt(b) - parseInt(a)).forEach((year) => {
+          const yearData = clientData.years[year]
+          
+          // Get all available months for this year
+          const months = yearData.estadoResultadosPeriodo.map((er) => er.mes).sort().reverse()
+          
+          months.forEach((monthStr) => {
+            const [yearPart, monthPart] = monthStr.split("-")
+            const monthName = getMonthName(monthStr)
+            
+            reports.push({
+              id: `report-${yearPart}-${monthPart}`,
+              month: monthName,
+              year: parseInt(yearPart),
+              date: new Date(parseInt(yearPart), parseInt(monthPart) - 1, 1).toISOString(),
+              clientId: clientName,
+            })
+          })
+        })
+
+        setAvailableReports(reports)
+      } catch (error) {
+        console.error("Error loading client reports:", error)
+        setAvailableReports([])
+      } finally {
+        setIsLoadingData(false)
+      }
     }
 
-    return reports
-  }
+    loadAvailableReports()
+  }, [isOpen, clientName])
 
-  const monthlyReports = generateMonthlyReports()
-
-  // Handle monthly report click - open MRM modal
   const handleMonthlyReportClick = (report: MonthlyReport) => {
     setSelectedReport(report)
-    setIsMRMModalOpen(true)
+    setIsReportModalOpen(true)
   }
 
-  const handleCloseMRMModal = () => {
-    setIsMRMModalOpen(false)
+  const convertMonthNameToNumber = (monthName: string): string => {
+    const monthMap: Record<string, string> = {
+      Enero: "01",
+      Febrero: "02",
+      Marzo: "03",
+      Abril: "04",
+      Mayo: "05",
+      Junio: "06",
+      Julio: "07",
+      Agosto: "08",
+      Septiembre: "09",
+      Octubre: "10",
+      Noviembre: "11",
+      Diciembre: "12",
+    }
+    return monthMap[monthName] || "01"
+  }
+
+  const handleCloseReportModal = () => {
+    setIsReportModalOpen(false)
     setSelectedReport(null)
   }
 
@@ -81,35 +116,47 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
           <p className="text-sm text-gray-600 mb-4">
             Selecciona un mes para ver el informe mensual correspondiente
           </p>
-          <div className="max-h-[60vh] overflow-y-auto pr-2">
-            <div className="grid grid-cols-3 gap-3">
-              {monthlyReports.map((report) => (
-                <Button
-                  key={report.id}
-                  variant="outline"
-                  size="lg"
-                  onClick={() => handleMonthlyReportClick(report)}
-                  className="flex items-center justify-between gap-2 w-full h-auto py-4 hover:bg-blue-50 hover:border-blue-300 transition-colors"
-                >
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-sm font-semibold">{report.month}</span>
-                    <span className="text-xs text-gray-500">{report.year}</span>
-                  </div>
-                  <FileDown className="h-5 w-5 text-blue-600" />
-                </Button>
-              ))}
+          
+          {isLoadingData ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
+              <span className="text-slate-600">Cargando reportes disponibles...</span>
             </div>
-          </div>
+          ) : availableReports.length === 0 ? (
+            <div className="text-center py-12">
+              <FileDown className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+              <p className="text-slate-600">No hay reportes disponibles para este cliente.</p>
+            </div>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-3 gap-3">
+                {availableReports.map((report) => (
+                  <Button
+                    key={report.id}
+                    variant="outline"
+                    size="lg"
+                    onClick={() => handleMonthlyReportClick(report)}
+                    className="flex items-center justify-between gap-2 w-full h-auto py-4 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                  >
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-sm font-semibold">{report.month}</span>
+                      <span className="text-xs text-gray-500">{report.year}</span>
+                    </div>
+                    <FileDown className="h-5 w-5 text-blue-600" />
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
 
-      {/* MRM Modal */}
       {selectedReport && (
-        <MRMModal
-          isOpen={isMRMModalOpen}
-          onClose={handleCloseMRMModal}
-          clientId={clientId}
-          month={selectedReport.month}
+        <ReportModal
+          isOpen={isReportModalOpen}
+          onClose={handleCloseReportModal}
+          clientId={clientName}
+          month={`${selectedReport.year}-${convertMonthNameToNumber(selectedReport.month)}`}
           year={selectedReport.year}
         />
       )}

@@ -1,0 +1,443 @@
+{
+  "clienteId": "fiduz",
+  "clienteNombre": "FIDUZ",
+  "razonSocial": "FIDUZ S.A. de C.V.",
+  "years": {
+    "2024": {
+      "estadoResultadosPeriodo": [
+        {
+          "mes": "2024-12",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 238417.47,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -238417.47
+        }
+      ],
+      "estadoResultadosYTD": [
+        {
+          "mes": "2024-12",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 238417.47,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -238417.47
+        }
+      ],
+      "balanceGeneral": [
+        {
+          "mes": "2024-12",
+          "ac": 86131.39,
+          "pc": 224548.86,
+          "bancos": 49877.47,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        }
+      ]
+    },
+    "2025": {
+      "estadoResultadosPeriodo": [
+        {
+          "mes": "2025-01",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 39208.13,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -39208.13
+        },
+        {
+          "mes": "2025-02",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 58730.25,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -58730.25
+        },
+        {
+          "mes": "2025-03",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 89430.67,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -89430.67
+        },
+        {
+          "mes": "2025-04",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 123187.05,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -123187.05
+        },
+        {
+          "mes": "2025-05",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 131443.32,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -131443.32
+        },
+        {
+          "mes": "2025-06",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 122050.48,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -122050.48
+        },
+        {
+          "mes": "2025-07",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 122360.43,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -122360.43
+        },
+        {
+          "mes": "2025-08",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 214795.67,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -214795.67
+        },
+        {
+          "mes": "2025-09",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 131187.67,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -131187.67
+        },
+        {
+          "mes": "2025-10",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 162436.92,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -162436.92
+        },
+        {
+          "mes": "2025-11",
+          "ingresos": 0.0,
+          "compras": 0.0,
+          "gastos": 157056.86,
+          "prodFin": 0,
+          "gastFin": 0,
+          "utilidad": -157056.86
+        }
+      ],
+      "estadoResultadosYTD": [
+        {
+          "mes": "2025-01",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 39208.13,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -39208.13
+        },
+        {
+          "mes": "2025-02",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 97938.38,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -97938.38
+        },
+        {
+          "mes": "2025-03",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 187369.05,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -187369.05
+        },
+        {
+          "mes": "2025-04",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 310556.1,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -310556.1
+        },
+        {
+          "mes": "2025-05",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 441999.42,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -441999.42
+        },
+        {
+          "mes": "2025-06",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 564049.9,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -564049.9
+        },
+        {
+          "mes": "2025-07",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 686410.33,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -686410.33
+        },
+        {
+          "mes": "2025-08",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 901206.0,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -901206.0
+        },
+        {
+          "mes": "2025-09",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 1032393.67,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -1032393.67
+        },
+        {
+          "mes": "2025-10",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 1194830.59,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -1194830.59
+        },
+        {
+          "mes": "2025-11",
+          "ingresosYTD": 0.0,
+          "comprasYTD": 0.0,
+          "gastosYTD": 1351887.45,
+          "prodFinYTD": 0,
+          "gastFinYTD": 0,
+          "utilidadYTD": -1351887.45
+        }
+      ],
+      "balanceGeneral": [
+        {
+          "mes": "2025-01",
+          "ac": 140231.9,
+          "pc": 217857.5,
+          "bancos": 97897.98,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-02",
+          "ac": 81501.65,
+          "pc": 217857.5,
+          "bancos": 30047.73,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-03",
+          "ac": 292070.98,
+          "pc": 217857.5,
+          "bancos": 226697.06,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-04",
+          "ac": 172603.37,
+          "pc": 221576.94,
+          "bancos": 90589.89,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-05",
+          "ac": 248944.19,
+          "pc": 229361.08,
+          "bancos": 148326.83,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-06",
+          "ac": 231100.04,
+          "pc": 233567.41,
+          "bancos": 117682.68,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-07",
+          "ac": 203385.21,
+          "pc": 228213.01,
+          "bancos": 33039.85,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 48475.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-08",
+          "ac": 247960.33,
+          "pc": 237583.8,
+          "bancos": 102912.78,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-09",
+          "ac": 253585.2,
+          "pc": 224396.34,
+          "bancos": 92489.65,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-10",
+          "ac": 202322.12,
+          "pc": 235570.18,
+          "bancos": 25386.57,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        },
+        {
+          "mes": "2025-11",
+          "ac": 352766.96,
+          "pc": 231855.88,
+          "bancos": 156895.8,
+          "inversiones": 0,
+          "clientes": 0,
+          "deudores": 5259.12,
+          "inventario": 0,
+          "anticipoProv": 0,
+          "pagosAnt": 0,
+          "anticipoCli": 0,
+          "capital": 0,
+          "utilidadEj": 0,
+          "anc": 0,
+          "plc": 0
+        }
+      ]
+    }
+  }
+}

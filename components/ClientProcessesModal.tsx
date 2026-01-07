@@ -27,6 +27,7 @@ import {
   Copy,
   Trash2,
   RefreshCw,
+  FileBarChart,
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -46,6 +47,7 @@ import type { ProcessHistoryFiltersType, ProcessHistorySorting, DownloadUrlRespo
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
 import { startOfDay, endOfDay, subDays } from "date-fns"
+import { MonthlyReportsModal } from "@/components/MonthlyReportsModal"
 
 // Interfaces para los datos de procesos
 interface ProcessItem {
@@ -136,6 +138,9 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [fileName, setFileName] = useState<string>("")
   const [fileId, setFileId] = useState<string>("")
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
+
+  // Estados para informes mensuales
+  const [isMonthlyReportsModalOpen, setIsMonthlyReportsModalOpen] = useState(false)
 
   // Estados para filtro de rango de fechas
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -872,7 +877,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="current" className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
                   Procesos Actuales ({filteredCurrentProcesses.length})
@@ -880,6 +885,10 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 <TabsTrigger value="historical" className="flex items-center gap-2">
                   <Archive className="h-4 w-4" />
                   Explorador de Documentos ({totalDocuments})
+                </TabsTrigger>
+                <TabsTrigger value="monthly-reports" className="flex items-center gap-2">
+                  <FileBarChart className="h-4 w-4" />
+                  Informes Mensuales
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -1156,6 +1165,58 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                   </div>
                 </div>
               </TabsContent>
+
+              {/* Monthly Reports Tab */}
+              <TabsContent
+                value="monthly-reports"
+                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+              >
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="max-w-4xl mx-auto">
+                    <div className="text-center mb-6">
+                      <FileBarChart className="h-16 w-16 text-blue-600 mx-auto mb-4" />
+                      <h3 className="text-2xl font-bold text-slate-900 mb-2">Informes Mensuales</h3>
+                      <p className="text-slate-600">
+                        Accede a los reportes financieros mensuales de {client.company}
+                      </p>
+                    </div>
+                    
+                    <Card className="border-2 border-blue-100">
+                      <CardContent className="p-8">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-full space-y-3">
+                            <div className="flex items-center gap-3 text-slate-700">
+                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                              <span>Reportes financieros detallados por mes</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-700">
+                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                              <span>KPIs calculados automáticamente</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-700">
+                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                              <span>Estado de Resultados y Balance General</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-700">
+                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                              <span>Visualización de datos históricos</span>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            onClick={() => setIsMonthlyReportsModalOpen(true)}
+                            className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white h-12"
+                            size="lg"
+                          >
+                            <FileBarChart className="mr-2 h-5 w-5" />
+                            Abrir Informes Mensuales
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
         </DialogContent>
@@ -1171,6 +1232,14 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         fileName={fileName}
         onDownload={handleDownloadDocument}
         isLoading={isLoadingDocument || isLoadingPreview}
+      />
+
+      {/* Monthly Reports Modal */}
+      <MonthlyReportsModal
+        isOpen={isMonthlyReportsModalOpen}
+        onClose={() => setIsMonthlyReportsModalOpen(false)}
+        clientId={client.id}
+        clientName={client.company}
       />
     </>
   )
