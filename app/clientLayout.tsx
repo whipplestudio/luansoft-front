@@ -1,14 +1,18 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import dynamic from "next/dynamic"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Header } from "@/components/Header"
-import { LottieLoader } from "@/components/LottieLoader"
 import { useLoading } from "@/hooks/useLoading"
 import type { User } from "@/types"
 import { usePathname, useRouter } from "next/navigation"
 import type React from "react"
+
+const LottieLoader = dynamic(() => import("@/components/LottieLoader").then((mod) => ({ default: mod.LottieLoader })), {
+  ssr: false,
+})
 
 export default function ClientLayout({
   children,
