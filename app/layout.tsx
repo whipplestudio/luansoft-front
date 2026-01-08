@@ -1,9 +1,18 @@
 import type React from "react"
+import { Jost } from "next/font/google"
 import ClientLayout from "./clientLayout"
 import "./globals.css" // Make sure this import is present
 // Importar los estilos del visor de PDF
 import "./pdf-viewer.css"
 import { Toaster } from "sonner"
+
+// Load Jost font with all the weights we need
+const jost = Jost({
+  subsets: ["latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  display: "swap",
+  variable: "--font-jost",
+})
 
 export const metadata = {
   title: "Luenser CMS Fiscal",
@@ -26,9 +35,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <ClientLayout>
-      <Toaster position="top-center" />
-      {children}
-    </ClientLayout>
+    <html lang="es">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      </head>
+      <body className={`${jost.className} ${jost.variable}`}>
+        <ClientLayout>
+          <Toaster position="top-center" />
+          {children}
+        </ClientLayout>
+      </body>
+    </html>
   )
 }

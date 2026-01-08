@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Jost } from "next/font/google"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Header } from "@/components/Header"
@@ -10,14 +9,6 @@ import { useLoading } from "@/hooks/useLoading"
 import type { User } from "@/types"
 import { usePathname, useRouter } from "next/navigation"
 import type React from "react"
-
-// Load Jost font with all the weights we need
-const jost = Jost({
-  subsets: ["latin"],
-  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
-  display: "swap",
-  variable: "--font-jost",
-})
 
 export default function ClientLayout({
   children,
@@ -83,36 +74,31 @@ export default function ClientLayout({
   const showSideBar = userRole !== "dashboard"
 
   return (
-    <html lang="es">
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-      </head>
-      <body className={`${jost.className} ${jost.variable}`}>
-        {isAuthenticated || isPublicRoute ? (
-          <>
-            {isAuthenticated && !isPublicRoute ? (
-              <SidebarProvider>
-                <div className="group/sidebar-wrapper flex min-h-screen w-full">
-                  {showSideBar && <AppSidebar userRole={userRole} />}
-                  <div className="flex w-full flex-col">
-                    <Header userRole={userRole} />
-                    <main className="flex-1 overflow-y-auto p-4 relative">
-                      {isLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/80">
-                          <LottieLoader />
-                        </div>
-                      )}
-                      <div key={pathname}>{children}</div>
-                    </main>
-                  </div>
+    <>
+      {isAuthenticated || isPublicRoute ? (
+        <>
+          {isAuthenticated && !isPublicRoute ? (
+            <SidebarProvider>
+              <div className="group/sidebar-wrapper flex min-h-screen w-full">
+                {showSideBar && <AppSidebar userRole={userRole} />}
+                <div className="flex w-full flex-col">
+                  <Header userRole={userRole} />
+                  <main className="flex-1 overflow-y-auto p-4 relative">
+                    {isLoading && (
+                      <div className="absolute inset-0 flex items-center justify-center z-50 bg-background/80">
+                        <LottieLoader />
+                      </div>
+                    )}
+                    <div key={pathname}>{children}</div>
+                  </main>
                 </div>
-              </SidebarProvider>
-            ) : (
-              children
-            )}
-          </>
-        ) : null}
-      </body>
-    </html>
+              </div>
+            </SidebarProvider>
+          ) : (
+            children
+          )}
+        </>
+      ) : null}
+    </>
   )
 }
