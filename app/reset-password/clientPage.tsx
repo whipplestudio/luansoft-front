@@ -33,7 +33,6 @@ const resetPasswordSchema = z
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
 
 export default function ResetPasswordClient() {
-    console.log("Entroooo");
     
   const router = useRouter()
   const searchParams = useSearchParams()
