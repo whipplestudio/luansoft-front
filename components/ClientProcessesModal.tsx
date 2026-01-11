@@ -48,6 +48,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
 import { startOfDay, endOfDay, subDays } from "date-fns"
 import { MonthlyReportsModal } from "@/components/MonthlyReportsModal"
+import { FiscalIndicators } from "@/components/FiscalIndicators"
 
 // Interfaces para los datos de procesos
 interface ProcessItem {
@@ -815,7 +816,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-7xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-7xl max-h-[90vh] flex flex-col">
           {/* Header fijo del modal */}
           <div className="sticky top-0 z-10 bg-white border-b">
             <DialogHeader className="pb-4">
@@ -877,7 +878,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="current" className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
                   Procesos Actuales ({filteredCurrentProcesses.length})
@@ -885,6 +886,10 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 <TabsTrigger value="historical" className="flex items-center gap-2">
                   <Archive className="h-4 w-4" />
                   Explorador de Documentos ({totalDocuments})
+                </TabsTrigger>
+                <TabsTrigger value="fiscal-indicators" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Indicadores Fiscales
                 </TabsTrigger>
                 <TabsTrigger value="monthly-reports" className="flex items-center gap-2">
                   <FileBarChart className="h-4 w-4" />
@@ -895,12 +900,12 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
           </div>
 
           {/* Body del modal con scroll */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-auto">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
               {/* Procesos Actuales */}
               <TabsContent
                 value="current"
-                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 {isLoadingCurrent ? (
                   <div className="flex justify-center items-center h-32">
@@ -976,7 +981,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               {/* Document Explorer */}
               <TabsContent
                 value="historical"
-                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 {/* Document Explorer Header */}
                 <div className="sticky top-0 z-10 bg-white border-b p-4 space-y-4">
@@ -1169,7 +1174,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               {/* Monthly Reports Tab */}
               <TabsContent
                 value="monthly-reports"
-                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 <div className="flex-1 overflow-y-auto p-6">
                   <div className="max-w-4xl mx-auto">
@@ -1215,6 +1220,23 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                       </CardContent>
                     </Card>
                   </div>
+                </div>
+              </TabsContent>
+
+              {/* Fiscal Indicators */}
+              <TabsContent
+                value="fiscal-indicators"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
+              >
+                <div className="h-full overflow-y-auto p-4">
+                  {client?.company ? (
+                    <FiscalIndicators clientCompany={client.company} />
+                  ) : (
+                    <div className="text-center py-12">
+                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">El cliente no tiene nombre de empresa registrado</p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

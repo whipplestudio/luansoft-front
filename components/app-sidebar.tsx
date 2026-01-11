@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +23,7 @@ import {
   ClipboardList,
   History,
   Contact,
+  LogOut,
 } from "lucide-react"
 import { hasPermission, type ResourceType, type RoleType } from "@/lib/permissions"
 // Importamos la versión desde package.json
@@ -100,7 +101,14 @@ const sidebarItems = [
 
 export function AppSidebar({ userRole }: { userRole: string | null }) {
   const pathname = usePathname()
+  const router = useRouter()
   const role = userRole as RoleType | null
+
+  const handleLogout = () => {
+    localStorage.removeItem("isAuthenticated")
+    localStorage.removeItem("userRole")
+    router.push("/login")
+  }
 
   // Filtra los elementos del sidebar basados en los permisos del usuario
   const filteredItems = sidebarItems.filter((item) => hasPermission(role, item.resource, "view"))
@@ -127,8 +135,18 @@ export function AppSidebar({ userRole }: { userRole: string | null }) {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Versión de la aplicación obtenida desde package.json */}
-      <div className="absolute bottom-4 left-4 text-xs text-white">Versión {packageInfo.version}</div>
+      {/* Footer con botón de cerrar sesión y versión */}
+      <div className="absolute bottom-4 left-4 text-xs text-white">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={handleLogout} className="w-full hover:bg-red-600/10 hover:text-red-600">
+              <LogOut className="h-4 w-4" />
+              <span>Cerrar sesión</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <div className="mt-3 text-xs text-muted-foreground text-center text-white">Versión {packageInfo.version}</div>
+      </div>
 
       <SidebarRail />
     </Sidebar>
