@@ -815,7 +815,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-7xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-7xl max-h-[90vh] flex flex-col">
           {/* Header fijo del modal */}
           <div className="sticky top-0 z-10 bg-white border-b">
             <DialogHeader className="pb-4">
@@ -895,12 +895,12 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
           </div>
 
           {/* Body del modal con scroll */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-auto">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
               {/* Procesos Actuales */}
               <TabsContent
                 value="current"
-                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 {isLoadingCurrent ? (
                   <div className="flex justify-center items-center h-32">
@@ -976,7 +976,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               {/* Document Explorer */}
               <TabsContent
                 value="historical"
-                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 {/* Document Explorer Header */}
                 <div className="sticky top-0 z-10 bg-white border-b p-4 space-y-4">
@@ -1169,7 +1169,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               {/* Monthly Reports Tab */}
               <TabsContent
                 value="monthly-reports"
-                className="h-full overflow-hidden flex flex-col mt-0 data-[state=inactive]:hidden"
+                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 <div className="flex-1 overflow-y-auto p-6">
                   <div className="max-w-4xl mx-auto">
