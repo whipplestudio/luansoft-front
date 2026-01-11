@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
+import html2canvas from "html2canvas"
+import { jsPDF } from "jspdf"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -20,6 +22,7 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
+  X,
 } from "lucide-react"
 import Image from "next/image"
 import type { ClienteFinancialData, EstadoResultadosPeriodo, BalanceGeneral } from "@/types/financial"
@@ -36,12 +39,14 @@ interface ReportContentDynamicProps {
   clientId: string
   month: string
   year: number
+  onClose?: () => void
 }
 
-export function ReportContentDynamic({ clientId, month, year }: ReportContentDynamicProps) {
+export function ReportContentDynamic({ clientId, month, year, onClose }: ReportContentDynamicProps) {
   const [clientData, setClientData] = useState<ClienteFinancialData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -54,11 +59,58 @@ export function ReportContentDynamic({ clientId, month, year }: ReportContentDyn
   }, [clientId])
 
   const handleDownloadPDF = async () => {
+    if (!contentRef.current || !clientData) return
+
     setIsGeneratingPDF(true)
     try {
-      alert("Exportación a PDF: pendiente de integración")
+      const element = contentRef.current
+      const canvas = await html2canvas(element, {
+        scale: 2.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#f8f9fa",
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight,
+      })
+
+      const imgData = canvas.toDataURL("image/png", 1.0)
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "letter",
+      })
+
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const margin = 10
+      const contentWidth = pdfWidth - (margin * 2)
+      const contentHeight = pdfHeight - (margin * 2)
+
+      const imgWidth = canvas.width
+      const imgHeight = canvas.height
+      const ratio = contentWidth / imgWidth
+      
+      const scaledWidth = imgWidth * ratio
+      const scaledHeight = imgHeight * ratio
+
+      let heightLeft = scaledHeight
+      let position = 0
+
+      pdf.addImage(imgData, "PNG", margin, margin, scaledWidth, scaledHeight)
+      heightLeft -= contentHeight
+
+      while (heightLeft > 0) {
+        position = -(scaledHeight - heightLeft)
+        pdf.addPage()
+        pdf.addImage(imgData, "PNG", margin, position + margin, scaledWidth, scaledHeight)
+        heightLeft -= contentHeight
+      }
+
+      const fileName = `Reporte_${clientData.clienteNombre.replace(/\s+/g, "_")}_${getMonthName(month)}_${year}.pdf`
+      pdf.save(fileName)
     } catch (error) {
       console.error("Error generating PDF:", error)
+      alert("Error al generar el PDF. Por favor, intenta de nuevo.")
     } finally {
       setIsGeneratingPDF(false)
     }
@@ -194,17 +246,20 @@ export function ReportContentDynamic({ clientId, month, year }: ReportContentDyn
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] w-full">
-      <div className="bg-[#18332f] shadow-lg">
-        <div className="container mx-auto px-6 py-6">
+      <div className="bg-[#18332f] shadow-lg sticky top-0 z-40">
+        <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-6">
-              <Image src="/luenser-logo.png" alt="Logo" width={180} height={60} className="h-12 w-auto" />
-              <div className="text-white">
-                <h1 className="text-2xl font-bold">{clientData.clienteNombre}</h1>
-                <p className="text-sm text-slate-300">{clientData.razonSocial}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-10 w-10 rounded-full bg-white/90 hover:bg-white text-[#18332f]"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            )}
+            <div className="ml-auto">
               <Button
                 onClick={handleDownloadPDF}
                 disabled={isGeneratingPDF}
@@ -219,7 +274,25 @@ export function ReportContentDynamic({ clientId, month, year }: ReportContentDyn
         </div>
       </div>
 
-      <div className="container mx-auto px-6 py-8 max-w-7xl">
+      <div ref={contentRef} className="container mx-auto px-6 py-8 max-w-7xl">
+        <div className="bg-[#18332f] rounded-lg shadow-lg p-8 mb-6">
+          <div className="flex items-center gap-8">
+            <div className="flex-shrink-0">
+              <Image 
+                src="/images/logo-vert-white.png" 
+                alt="Logo" 
+                width={240} 
+                height={80} 
+                className="object-contain" 
+                priority
+              />
+            </div>
+            <div className="text-white flex-1">
+              <h1 className="text-4xl font-bold mb-2">{clientData.clienteNombre}</h1>
+              <p className="text-lg text-slate-300">{clientData.razonSocial}</p>
+            </div>
+          </div>
+        </div>
         <div className="bg-white rounded-lg shadow-sm p-8 mb-6 border-l-4 border-l-[#ffe48b]">
           <div className="text-center mb-6">
             <h2 className="text-4xl font-bold text-[#18332f] mb-3">Reporte Ejecutivo Financiero</h2>
