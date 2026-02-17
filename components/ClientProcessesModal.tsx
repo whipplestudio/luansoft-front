@@ -49,6 +49,8 @@ import type { DateRange } from "react-day-picker"
 import { startOfDay, endOfDay, subDays } from "date-fns"
 import { MonthlyReportsModal } from "@/components/MonthlyReportsModal"
 import { FiscalIndicators } from "@/components/FiscalIndicators"
+import { uploadFinancialData } from "@/api/financial-data"
+import { Upload, FileType } from "lucide-react"
 
 // Interfaces para los datos de procesos
 interface ProcessItem {
@@ -142,6 +144,11 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
 
   // Estados para informes mensuales
   const [isMonthlyReportsModalOpen, setIsMonthlyReportsModalOpen] = useState(false)
+  
+  // Estados para subida de PDFs
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   // Estados para filtro de rango de fechas
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -443,7 +450,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       }
 
       // Usar los procesos que ya vienen en los datos del cliente
-      const processes = client.originalData.processes.map((p) => ({
+      const processesRaw = client.originalData.processes.map((p) => ({
         id: p.id,
         name: p.name,
         status: p.status,
@@ -452,6 +459,13 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         graceDays: p.graceDays,
         file: p.file,
       }))
+
+      // Deduplicar por ID usando Map (mantiene el último proceso con cada ID único)
+      const processesMap = new Map<string, ProcessItem>()
+      processesRaw.forEach(process => {
+        processesMap.set(process.id, process)
+      })
+      const processes = Array.from(processesMap.values())
 
       setCurrentProcesses(processes)
     } catch (error) {
@@ -698,6 +712,58 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const handleResetCurrentFilters = () => {
     setSearchTerm("")
     setStatusFilter("all")
+  }
+
+  // Función para manejar selección de archivos
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files) {
+      const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf')
+      if (pdfFiles.length !== files.length) {
+        toast.warning('Solo se permiten archivos PDF')
+      }
+      setSelectedFiles(prev => [...prev, ...pdfFiles])
+    }
+  }
+
+  // Función para eliminar archivo seleccionado
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Función para subir archivos
+  const handleUploadFiles = async () => {
+    if (!client?.originalData?.id || selectedFiles.length === 0) {
+      toast.error('Selecciona al menos un archivo PDF')
+      return
+    }
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    try {
+      // Simular progreso
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90))
+      }, 200)
+
+      const result = await uploadFinancialData(client.originalData.id, selectedFiles)
+      
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+
+      toast.success(`${result.filesProcessed} archivo(s) procesado(s) exitosamente`)
+      setSelectedFiles([])
+      setUploadProgress(0)
+      
+      // Refresh data if needed
+      // fetchCurrentProcesses()
+    } catch (error: any) {
+      console.error('Error uploading files:', error)
+      toast.error(error.response?.data?.message || 'Error al subir los archivos')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   // Función para manejar cambios en el rango de fechas
@@ -1177,43 +1243,174 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
                 <div className="flex-1 overflow-y-auto p-6">
-                  <div className="max-w-4xl mx-auto">
-                    <div className="text-center mb-6">
-                      <FileBarChart className="h-16 w-16 text-blue-600 mx-auto mb-4" />
-                      <h3 className="text-2xl font-bold text-slate-900 mb-2">Informes Mensuales</h3>
-                      <p className="text-slate-600">
-                        Accede a los reportes financieros mensuales de {client.company}
+                  <div className="max-w-5xl mx-auto space-y-6">
+                    {/* Header Section */}
+                    <div className="text-center mb-8">
+                      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 mb-4 shadow-lg">
+                        <FileBarChart className="h-10 w-10 text-white" />
+                      </div>
+                      <h3 className="text-3xl font-bold text-slate-900 mb-2">Informes Financieros</h3>
+                      <p className="text-slate-600 text-lg">
+                        Gestiona los documentos financieros de {client.company}
                       </p>
                     </div>
-                    
-                    <Card className="border-2 border-blue-100">
+
+                    {/* Upload Section */}
+                    <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
                       <CardContent className="p-8">
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="w-full space-y-3">
-                            <div className="flex items-center gap-3 text-slate-700">
-                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                              <span>Reportes financieros detallados por mes</span>
+                        <div className="space-y-6">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                              <Upload className="h-6 w-6 text-blue-600" />
                             </div>
-                            <div className="flex items-center gap-3 text-slate-700">
-                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                              <span>KPIs calculados automáticamente</span>
+                            <div>
+                              <h4 className="text-xl font-bold text-slate-900">Subir Documentos</h4>
+                              <p className="text-sm text-slate-600">
+                                Sube PDFs de Estado de Resultados, Balance General y Anexos
+                              </p>
                             </div>
-                            <div className="flex items-center gap-3 text-slate-700">
-                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                              <span>Estado de Resultados y Balance General</span>
+                          </div>
+
+                          {/* File Input */}
+                          <div className="relative">
+                            <input
+                              type="file"
+                              id="pdf-upload"
+                              multiple
+                              accept="application/pdf"
+                              onChange={handleFileSelect}
+                              className="hidden"
+                              disabled={isUploading}
+                            />
+                            <label
+                              htmlFor="pdf-upload"
+                              className={`flex flex-col items-center justify-center w-full h-40 border-3 border-dashed rounded-2xl cursor-pointer transition-all ${
+                                isUploading
+                                  ? 'border-slate-300 bg-slate-50 cursor-not-allowed'
+                                  : 'border-blue-300 bg-blue-50 hover:bg-blue-100 hover:border-blue-400'
+                              }`}
+                            >
+                              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <FileType className={`w-12 h-12 mb-3 ${isUploading ? 'text-slate-400' : 'text-blue-500'}`} />
+                                <p className="mb-2 text-sm font-semibold text-slate-700">
+                                  <span className="text-blue-600">Click para seleccionar</span> o arrastra archivos
+                                </p>
+                                <p className="text-xs text-slate-500">Solo archivos PDF (múltiples archivos permitidos)</p>
+                              </div>
+                            </label>
+                          </div>
+
+                          {/* Selected Files List */}
+                          {selectedFiles.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-semibold text-slate-700 mb-3">
+                                Archivos seleccionados ({selectedFiles.length})
+                              </p>
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {selectedFiles.map((file, index) => (
+                                  <div
+                                    key={index}
+                                    className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                      <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium text-slate-900 truncate">{file.name}</p>
+                                        <p className="text-xs text-slate-500">
+                                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {!isUploading && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRemoveFile(index)}
+                                        className="h-8 w-8 p-0 rounded-full hover:bg-red-100"
+                                      >
+                                        <X className="h-4 w-4 text-red-600" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3 text-slate-700">
-                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                              <span>Visualización de datos históricos</span>
+                          )}
+
+                          {/* Upload Progress */}
+                          {isUploading && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="font-medium text-slate-700">Procesando archivos...</span>
+                                <span className="font-bold text-blue-600">{uploadProgress}%</span>
+                              </div>
+                              <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                                  style={{ width: `${uploadProgress}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Upload Button */}
+                          <Button
+                            onClick={handleUploadFiles}
+                            disabled={selectedFiles.length === 0 || isUploading}
+                            className="w-full h-14 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-lg rounded-xl shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                          >
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="mr-3 h-6 w-6 animate-spin" />
+                                Procesando archivos...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="mr-3 h-6 w-6" />
+                                Subir y Procesar ({selectedFiles.length})
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* View Reports Section */}
+                    <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
+                      <CardContent className="p-8">
+                        <div className="flex flex-col items-center gap-6">
+                          <div className="text-center">
+                            <h4 className="text-xl font-bold text-slate-900 mb-2">Ver Informes Mensuales</h4>
+                            <p className="text-slate-600 mb-6">
+                              Consulta los reportes financieros procesados
+                            </p>
+                          </div>
+                          
+                          <div className="w-full grid grid-cols-2 gap-4 mb-4">
+                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-green-50 rounded-xl border border-green-200">
+                              <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
+                              <span className="font-medium">KPIs Automáticos</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                              <CheckCircle className="h-6 w-6 text-blue-600 flex-shrink-0" />
+                              <span className="font-medium">Balance General</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-purple-50 rounded-xl border border-purple-200">
+                              <CheckCircle className="h-6 w-6 text-purple-600 flex-shrink-0" />
+                              <span className="font-medium">Estado Resultados</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                              <CheckCircle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+                              <span className="font-medium">Datos Históricos</span>
                             </div>
                           </div>
                           
                           <Button
                             onClick={() => setIsMonthlyReportsModalOpen(true)}
-                            className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white h-12"
+                            className="w-full h-14 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold text-lg rounded-xl shadow-md hover:shadow-lg transition-all"
                             size="lg"
                           >
-                            <FileBarChart className="mr-2 h-5 w-5" />
+                            <FileBarChart className="mr-3 h-6 w-6" />
                             Abrir Informes Mensuales
                           </Button>
                         </div>

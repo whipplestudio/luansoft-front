@@ -2,12 +2,12 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { FileDown, X, Loader2 } from "lucide-react"
+import { FileDown, X, Loader2, AlertCircle } from "lucide-react"
 import { useState, useEffect } from "react"
 import type { MonthlyReport } from "@/types"
 import { ReportModal } from "@/components/contpaq-data"
-import { loadClientFinancialData, getMonthName } from "@/lib/financial-data-service"
-import type { ClienteFinancialData } from "@/types/financial"
+import { getFinancialData, getMonthName, type ClienteFinancialData } from "@/api/financial-data"
+import { toast } from "sonner"
 
 interface MonthlyReportsModalProps {
   isOpen: boolean
@@ -29,7 +29,7 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
     const loadAvailableReports = async () => {
       setIsLoadingData(true)
       try {
-        const clientData: ClienteFinancialData | null = await loadClientFinancialData(clientName)
+        const clientData: ClienteFinancialData | null = await getFinancialData(clientId)
         
         if (!clientData) {
           setAvailableReports([])
@@ -54,7 +54,7 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
               month: monthName,
               year: parseInt(yearPart),
               date: new Date(parseInt(yearPart), parseInt(monthPart) - 1, 1).toISOString(),
-              clientId: clientName,
+              clientId: clientId,
             })
           })
         })
@@ -62,6 +62,7 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
         setAvailableReports(reports)
       } catch (error) {
         console.error("Error loading client reports:", error)
+        toast.error("Error al cargar los reportes financieros")
         setAvailableReports([])
       } finally {
         setIsLoadingData(false)
@@ -69,7 +70,7 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
     }
 
     loadAvailableReports()
-  }, [isOpen, clientName])
+  }, [isOpen, clientId])
 
   const handleMonthlyReportClick = (report: MonthlyReport) => {
     setSelectedReport(report)
@@ -101,49 +102,65 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] max-h-[85vh]">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] rounded-3xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-2xl font-bold">
+            <DialogTitle className="text-2xl font-bold text-slate-900">
               Informes Mensuales - {clientName}
             </DialogTitle>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
-              <X className="h-4 w-4" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onClose} 
+              className="h-10 w-10 rounded-full hover:bg-slate-100"
+            >
+              <X className="h-5 w-5 text-slate-600" />
             </Button>
           </div>
         </DialogHeader>
-        <div className="py-4">
-          <p className="text-sm text-gray-600 mb-4">
-            Selecciona un mes para ver el informe mensual correspondiente
+        <div className="py-6">
+          <p className="text-sm text-slate-600 mb-6 px-1">
+            Selecciona un mes para ver el informe financiero detallado
           </p>
           
           {isLoadingData ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" />
-              <span className="text-slate-600">Cargando reportes disponibles...</span>
+            <div className="flex flex-col items-center justify-center py-16 space-y-4">
+              <div className="relative">
+                <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                </div>
+              </div>
+              <span className="text-slate-600 font-medium">Cargando reportes disponibles...</span>
             </div>
           ) : availableReports.length === 0 ? (
-            <div className="text-center py-12">
-              <FileDown className="h-12 w-12 text-slate-400 mx-auto mb-3" />
-              <p className="text-slate-600">No hay reportes disponibles para este cliente.</p>
+            <div className="text-center py-16 px-4">
+              <div className="mx-auto mb-6 h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center">
+                <AlertCircle className="h-10 w-10 text-slate-400" />
+              </div>
+              <p className="text-slate-700 font-semibold text-lg mb-2">No hay reportes disponibles</p>
+              <p className="text-slate-500 text-sm max-w-md mx-auto">
+                Sube documentos financieros para generar reportes mensuales
+              </p>
             </div>
           ) : (
-            <div className="max-h-[60vh] overflow-y-auto pr-2">
-              <div className="grid grid-cols-3 gap-3">
+            <div className="max-h-[65vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+              <div className="grid grid-cols-3 gap-4">
                 {availableReports.map((report) => (
-                  <Button
+                  <button
                     key={report.id}
-                    variant="outline"
-                    size="lg"
                     onClick={() => handleMonthlyReportClick(report)}
-                    className="flex items-center justify-between gap-2 w-full h-auto py-4 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    className="group relative flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg transition-all duration-200 active:scale-95"
                   >
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-sm font-semibold">{report.month}</span>
-                      <span className="text-xs text-gray-500">{report.year}</span>
+                    <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md group-hover:shadow-xl transition-shadow">
+                      <FileDown className="h-7 w-7 text-white" />
                     </div>
-                    <FileDown className="h-5 w-5 text-blue-600" />
-                  </Button>
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-base font-bold text-slate-900 group-hover:text-blue-700">
+                        {report.month}
+                      </span>
+                      <span className="text-sm text-slate-500 font-medium">{report.year}</span>
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -155,7 +172,7 @@ export function MonthlyReportsModal({ isOpen, onClose, clientId, clientName }: M
         <ReportModal
           isOpen={isReportModalOpen}
           onClose={handleCloseReportModal}
-          clientId={clientName}
+          clientId={clientId}
           month={`${selectedReport.year}-${convertMonthNameToNumber(selectedReport.month)}`}
           year={selectedReport.year}
         />

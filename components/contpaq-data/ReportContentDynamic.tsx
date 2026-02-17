@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import type { ClienteFinancialData, EstadoResultadosPeriodo, BalanceGeneral } from "@/types/financial"
-import { loadClientFinancialData, getMonthName } from "@/lib/financial-data-service"
+import { getFinancialData, getMonthName } from "@/api/financial-data"
 import {
   calcularKPIsFinancieros,
   calcularVariacionPeriodos,
@@ -51,9 +51,15 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
   useEffect(() => {
     async function loadData() {
       setIsLoading(true)
-      const data = await loadClientFinancialData(clientId)
-      setClientData(data)
-      setIsLoading(false)
+      try {
+        const data = await getFinancialData(clientId)
+        setClientData(data)
+      } catch (error) {
+        console.error("Error loading financial data:", error)
+        setClientData(null)
+      } finally {
+        setIsLoading(false)
+      }
     }
     loadData()
   }, [clientId])
@@ -124,7 +130,16 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
 
     const erPeriodo = yearData.estadoResultadosPeriodo.find((er) => er.mes === month)
     const erYTD = yearData.estadoResultadosYTD.find((er) => er.mes === month)
-    const bg = yearData.balanceGeneral.find((b) => b.mes === month)
+    
+    // Buscar balance general para el mes específico
+    let bg = yearData.balanceGeneral.find((b) => b.mes === month)
+    
+    // Si no existe balance para este mes, usar el más reciente disponible
+    if (!bg && yearData.balanceGeneral.length > 0) {
+      // Ordenar balances por mes y tomar el más reciente que sea <= al mes solicitado
+      const sortedBalances = [...yearData.balanceGeneral].sort((a, b) => a.mes.localeCompare(b.mes))
+      bg = sortedBalances.reverse().find((b) => b.mes <= month) || sortedBalances[sortedBalances.length - 1]
+    }
 
     if (!erPeriodo || !erYTD || !bg) return null
 
@@ -145,7 +160,7 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
       .sort()
       .forEach((y) => {
         const yData = clientData.years[y]
-        yData.estadoResultadosPeriodo.forEach((er) => {
+        yData.estadoResultadosPeriodo.forEach((er: EstadoResultadosPeriodo) => {
           allPeriodos.push({ ...er, anio: parseInt(y) })
         })
       })
@@ -155,7 +170,7 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
       .sort()
       .forEach((y) => {
         const yData = clientData.years[y]
-        yData.balanceGeneral.forEach((b) => {
+        yData.balanceGeneral.forEach((b: BalanceGeneral) => {
           allBalances.push({ ...b, anio: parseInt(y) })
         })
       })
