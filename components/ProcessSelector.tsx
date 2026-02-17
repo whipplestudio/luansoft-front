@@ -99,24 +99,25 @@ export function ProcessSelector({
 
                 return (
                   <AccordionItem key={process.id} value={process.id} className="border rounded-lg">
-                    <AccordionTrigger className="px-3 py-2 hover:no-underline">
-                      <div className="flex items-center gap-2 flex-1">
-                        <Checkbox
-                          checked={isProcessSelected}
-                          onCheckedChange={() => onProcessSelect(process.id)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-sm">{process.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {process.count} documento{process.count !== 1 ? "s" : ""}
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <Checkbox
+                        checked={isProcessSelected}
+                        onCheckedChange={() => onProcessSelect(process.id)}
+                      />
+                      <AccordionTrigger className="flex-1 py-0 hover:no-underline">
+                        <div className="flex items-center gap-2 flex-1">
+                          <div className="flex-1 text-left">
+                            <div className="font-medium text-sm">{process.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {process.count} documento{process.count !== 1 ? "s" : ""}
+                            </div>
                           </div>
+                          <Badge variant="secondary" className="text-xs">
+                            {process.count}
+                          </Badge>
                         </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {process.count}
-                        </Badge>
-                      </div>
-                    </AccordionTrigger>
+                      </AccordionTrigger>
+                    </div>
                     <AccordionContent className="px-3 pb-2">
                       <div className="space-y-1 ml-6">
                         {process.months.map((monthData) => {

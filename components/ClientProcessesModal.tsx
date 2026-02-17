@@ -131,7 +131,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   // Estados para filtros y búsqueda de procesos actuales
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [activeTab, setActiveTab] = useState("current")
+  const [activeTab, setActiveTab] = useState("fiscal-indicators")
 
   // Estados para el visor de documentos
   const [documentUrl, setDocumentUrl] = useState<string | null>(null)
@@ -807,7 +807,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     if (!isOpen) {
       setSearchTerm("")
       setStatusFilter("all")
-      setActiveTab("current")
+      setActiveTab("fiscal-indicators")
       setCurrentProcesses([])
       // Resetear filtros del historial
       setHistoricalFilters({})
@@ -892,70 +892,16 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               </DialogTitle>
             </DialogHeader>
 
-            {/* Filtros y búsqueda - Solo para procesos actuales */}
-            {activeTab === "current" && (
-              <div className="space-y-4 pb-4">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      placeholder="Buscar procesos..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                    {searchTerm && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
-                        onClick={() => setSearchTerm("")}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-48">
-                      <Filter className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Filtrar por estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos los estados</SelectItem>
-                      <SelectItem value="completed">Completados</SelectItem>
-                      <SelectItem value="onTime">En tiempo</SelectItem>
-                      <SelectItem value="atRisk">En riesgo</SelectItem>
-                      <SelectItem value="delayed">Atrasados</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleResetCurrentFilters}
-                    aria-label="Restablecer filtros"
-                    title="Restablecer filtros"
-                    className="text-gray-600 hover:text-gray-900"
-                  >
-                    Restablecer
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="current" className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Procesos Actuales ({filteredCurrentProcesses.length})
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="fiscal-indicators" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Indicadores Fiscales
                 </TabsTrigger>
                 <TabsTrigger value="historical" className="flex items-center gap-2">
                   <Archive className="h-4 w-4" />
                   Explorador de Documentos ({totalDocuments})
-                </TabsTrigger>
-                <TabsTrigger value="fiscal-indicators" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Indicadores Fiscales
                 </TabsTrigger>
                 <TabsTrigger value="monthly-reports" className="flex items-center gap-2">
                   <FileBarChart className="h-4 w-4" />
@@ -968,82 +914,6 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
           {/* Body del modal con scroll */}
           <div className="flex-1 min-h-0 overflow-auto">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-              {/* Procesos Actuales */}
-              <TabsContent
-                value="current"
-                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
-              >
-                {isLoadingCurrent ? (
-                  <div className="flex justify-center items-center h-32">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                  </div>
-                ) : filteredCurrentProcesses.length > 0 ? (
-                  <div className="h-full overflow-y-auto pr-2 -mr-2 p-4" style={{ WebkitOverflowScrolling: "touch" }}>
-                    <div className="grid gap-4">
-                      {filteredCurrentProcesses.map((process) => (
-                        <Card key={process.id} className="hover:shadow-md transition-shadow">
-                          <CardContent className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  {getStatusIcon(process.deliveryStatus)}
-                                  <h3 className="font-semibold text-lg">{process.name}</h3>
-                                  <Badge variant="outline" className={getStatusBadgeColor(process.deliveryStatus)}>
-                                    {getStatusText(process.deliveryStatus)}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm text-gray-600">
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>
-                                      Vence: {format(new Date(process.commitmentDate), "dd/MM/yyyy", { locale: es })}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-4 w-4" />
-                                    <span>Días de gracia: {process.graceDays}</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {process.deliveryStatus === "completed" && process.file && (
-                                  <>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleOpenDocumentViewer(process)}
-                                      disabled={isLoadingDocument}
-                                      className="flex items-center gap-1"
-                                      aria-label={`Ver documento de ${process.name}`}
-                                    >
-                                      {isLoadingDocument ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Eye className="h-4 w-4" />
-                                      )}
-                                      Ver
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">
-                      {searchTerm || statusFilter !== "all"
-                        ? "No se encontraron procesos actuales con los filtros aplicados"
-                        : "No hay procesos actuales para este cliente"}
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
-
               {/* Document Explorer */}
               <TabsContent
                 value="historical"
