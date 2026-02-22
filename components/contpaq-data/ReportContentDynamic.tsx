@@ -43,6 +43,9 @@ interface ReportContentDynamicProps {
 }
 
 export function ReportContentDynamic({ clientId, month, year, onClose }: ReportContentDynamicProps) {
+  console.log("🚀 ~ ReportContentDynamic ~ year:", year)
+  console.log("🚀 ~ ReportContentDynamic ~ month:", month)
+  console.log("🚀 ~ ReportContentDynamic ~ clientId:", clientId)
   const [clientData, setClientData] = useState<ClienteFinancialData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
@@ -260,11 +263,11 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
   ]
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] w-full">
-      <div className="bg-[#18332f] shadow-lg sticky top-0 z-40">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {onClose && (
+    <div className="min-h-screen bg-[#f8f9fa] w-full" data-report-content>
+      {onClose && (
+        <div className="bg-[#18332f] shadow-lg sticky top-0 z-40">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
                 size="icon"
@@ -273,21 +276,21 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
               >
                 <X className="h-5 w-5" />
               </Button>
-            )}
-            <div className="ml-auto">
-              <Button
-                onClick={handleDownloadPDF}
-                disabled={isGeneratingPDF}
-                size="lg"
-                className="bg-[#ffe48b] hover:bg-[#ffd966] text-[#18332f] font-semibold"
-              >
-                <Download className="mr-2 h-5 w-5" />
-                {isGeneratingPDF ? "Generando PDF..." : "Exportar a PDF"}
-              </Button>
+              <div className="ml-auto">
+                <Button
+                  onClick={handleDownloadPDF}
+                  disabled={isGeneratingPDF}
+                  size="lg"
+                  className="bg-[#ffe48b] hover:bg-[#ffd966] text-[#18332f] font-semibold"
+                >
+                  <Download className="mr-2 h-5 w-5" />
+                  {isGeneratingPDF ? "Generando PDF..." : "Exportar a PDF"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div ref={contentRef} className="container mx-auto px-6 py-8 max-w-7xl">
         <div className="bg-[#18332f] rounded-lg shadow-lg p-8 mb-6">

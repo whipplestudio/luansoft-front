@@ -46,7 +46,7 @@ export default function ClientLayout({
     setUserRole(role)
 
     // Lista de rutas públicas que no requieren autenticación
-    const publicRoutes = ["/login", "/cambiar-contrasena", "/reset-password"]
+    const publicRoutes = ["/login", "/cambiar-contrasena", "/reset-password", "/reports"]
 
     // Verificar si la ruta actual es pública
     const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
@@ -66,7 +66,7 @@ export default function ClientLayout({
   }, [])
 
   // Lista de rutas públicas que no requieren autenticación
-  const publicRoutes = ["/login", "/cambiar-contrasena", "/reset-password"]
+  const publicRoutes = ["/login", "/cambiar-contrasena", "/reset-password", "/reports"]
 
   // Verificar si la ruta actual es pública
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))

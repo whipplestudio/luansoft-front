@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { FileText, Loader2, AlertCircle, Eye, Download } from "lucide-react"
+import { FileText, Loader2, AlertCircle, Eye, Download, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState, useEffect, useCallback } from "react"
 import { axiosInstance } from "@/lib/axios"
@@ -54,6 +54,7 @@ export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadingFileName, setDownloadingFileName] = useState("")
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Función para obtener el mes anterior
   const getPreviousMonth = () => {
@@ -71,6 +72,95 @@ export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
   const previousMonth = getPreviousMonth()
   const [selectedYear, setSelectedYear] = useState(previousMonth.year)
   const [selectedMonth, setSelectedMonth] = useState(previousMonth.month)
+
+  // Función para sincronizar datos fiscales (llama al proxy en NestJS)
+  const handleSyncFiscal = async () => {
+    if (!contalinkData?.rfc) {
+      toast.error('No se puede sincronizar: el cliente no tiene RFC registrado')
+      return
+    }
+
+    try {
+      setIsSyncing(true)
+      
+      const response = await axiosInstance.post(
+        '/contalink/sync-fiscal',
+        {
+          rfc: contalinkData.rfc,
+          year: parseInt(selectedYear),
+          month: parseInt(selectedMonth),
+        }
+      )
+
+      if (response.data?.success) {
+        toast.success(
+          response.data.message || 'Sincronización completada exitosamente',
+          {
+            description: 'Los datos fiscales han sido actualizados',
+            duration: 4000,
+          }
+        )
+        
+        // Recargar datos después de sincronización exitosa
+        await fetchContalinkObligations()
+      }
+    } catch (error: any) {
+      console.error('Error al sincronizar datos fiscales:', error)
+      
+      if (error.response?.status === 429) {
+        // Rate limit activo
+        const errorData = error.response.data
+        console.log('📊 Rate limit error data:', errorData)
+        
+        // Intentar obtener remainingMinutes de múltiples fuentes
+        let remainingMinutes = errorData?.data?.remainingMinutes || errorData?.remainingMinutes
+        
+        // Si data es null, extraer del mensaje (ej: "...espera 2 minuto(s)...")
+        if (!remainingMinutes && errorData?.message) {
+          const match = errorData.message.match(/espera (\d+) minuto/)
+          remainingMinutes = match ? parseInt(match[1]) : 30
+        }
+        
+        // Fallback final
+        remainingMinutes = remainingMinutes || 30
+        
+        toast.error(
+          'Sincronización bloqueada temporalmente',
+          {
+            description: `Este RFC fue sincronizado recientemente. Por favor espera ${remainingMinutes} minuto(s) antes de sincronizar nuevamente.`,
+            duration: 6000,
+          }
+        )
+      } else if (error.response?.status === 404) {
+        toast.error('Cliente no encontrado en el sistema')
+      } else if (error.response?.status === 502) {
+        toast.error(
+          'Error de comunicación con la API externa',
+          {
+            description: 'No se pudo conectar con el servicio de sincronización',
+            duration: 5000,
+          }
+        )
+      } else if (error.response?.status === 504) {
+        toast.error(
+          'Tiempo de espera agotado',
+          {
+            description: 'La sincronización está tomando más tiempo del esperado. Intenta nuevamente en unos minutos.',
+            duration: 5000,
+          }
+        )
+      } else {
+        toast.error(
+          error.response?.data?.message || 'Error al sincronizar datos fiscales',
+          {
+            description: 'Ocurrió un error inesperado durante la sincronización',
+          }
+        )
+      }
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   // Función para obtener las obligaciones con archivos de un cliente específico
   const fetchContalinkObligations = async () => {
@@ -313,7 +403,7 @@ export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
               </div>
               <Button
                 onClick={fetchContalinkObligations}
-                disabled={isLoadingContalink}
+                disabled={isLoadingContalink || isSyncing}
                 className="bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white px-6 py-2"
               >
                 {isLoadingContalink ? (
@@ -323,6 +413,24 @@ export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
                   </>
                 ) : (
                   'Aplicar'
+                )}
+              </Button>
+              <Button
+                onClick={handleSyncFiscal}
+                disabled={isLoadingContalink || isSyncing || !contalinkData?.rfc}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-2"
+                title={!contalinkData?.rfc ? 'Cliente sin RFC registrado' : 'Sincronizar datos desde Contalink (Cloud Run)'}
+              >
+                {isSyncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Sincronizar
+                  </>
                 )}
               </Button>
             </div>

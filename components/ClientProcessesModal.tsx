@@ -47,9 +47,10 @@ import type { ProcessHistoryFiltersType, ProcessHistorySorting, DownloadUrlRespo
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import type { DateRange } from "react-day-picker"
 import { startOfDay, endOfDay, subDays } from "date-fns"
-import { MonthlyReportsModal } from "@/components/MonthlyReportsModal"
 import { FiscalIndicators } from "@/components/FiscalIndicators"
-import { uploadFinancialData } from "@/api/financial-data"
+import { uploadFinancialData, getFinancialData, getMonthName, type ClienteFinancialData } from "@/api/financial-data"
+import { ReportModal } from "@/components/contpaq-data"
+import type { MonthlyReport } from "@/types"
 import { Upload, FileType } from "lucide-react"
 
 // Interfaces para los datos de procesos
@@ -141,9 +142,12 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [fileName, setFileName] = useState<string>("")
   const [fileId, setFileId] = useState<string>("")
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
-
-  // Estados para informes mensuales
-  const [isMonthlyReportsModalOpen, setIsMonthlyReportsModalOpen] = useState(false)
+  
+  // Estados para informes mensuales integrados
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+  const [selectedReport, setSelectedReport] = useState<MonthlyReport | null>(null)
+  const [isLoadingReportsData, setIsLoadingReportsData] = useState(false)
+  const [availableReports, setAvailableReports] = useState<MonthlyReport[]>([])
   
   // Estados para subida de PDFs
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -794,11 +798,60 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     if (isOpen && client) {
       fetchCurrentProcesses()
       fetchContadores()
-      fetchProcesses()
-
-      // NO longer setting historical filters here - they are handled by the document explorer
+      loadAvailableReports()
     }
-  }, [isOpen, client, fetchCurrentProcesses, fetchContadores, fetchProcesses])
+  }, [isOpen, client, fetchCurrentProcesses, fetchContadores])
+
+  // Función para cargar reportes disponibles
+  const loadAvailableReports = async () => {
+    if (!client?.id) return
+    
+    setIsLoadingReportsData(true)
+    try {
+      const clientData: ClienteFinancialData | null = await getFinancialData(client.id)
+      
+      if (!clientData) {
+        setAvailableReports([])
+        return
+      }
+
+      const reports: MonthlyReport[] = []
+      
+      // Iterate through all years in the client data
+      Object.keys(clientData.years).sort((a, b) => parseInt(b) - parseInt(a)).forEach((year) => {
+        const yearData = clientData.years[year]
+        
+        // Get all available months for this year
+        const months = yearData.estadoResultadosPeriodo.map((er) => er.mes).sort().reverse()
+        
+        months.forEach((monthStr) => {
+          const [yearPart, monthPart] = monthStr.split("-")
+          const monthName = getMonthName(monthStr)
+          
+          reports.push({
+            id: `report-${yearPart}-${monthPart}`,
+            month: monthName,
+            year: parseInt(yearPart),
+            date: new Date(parseInt(yearPart), parseInt(monthPart) - 1, 1).toISOString(),
+            clientId: client.id,
+          })
+        })
+      })
+
+      setAvailableReports(reports)
+    } catch (error) {
+      console.error("Error loading client reports:", error)
+      toast.error("Error al cargar los reportes financieros")
+      setAvailableReports([])
+    } finally {
+      setIsLoadingReportsData(false)
+    }
+  }
+
+  const handleMonthlyReportClick = (report: MonthlyReport) => {
+    setSelectedReport(report)
+    setIsReportModalOpen(true)
+  }
 
   // REMOVED: Legacy historical data loading effect - now handled by manual fetch in useDocumentExplorer
 
@@ -1112,21 +1165,10 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 value="monthly-reports"
                 className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
               >
-                <div className="flex-1 overflow-y-auto p-6">
-                  <div className="max-w-5xl mx-auto space-y-6">
-                    {/* Header Section */}
-                    <div className="text-center mb-8">
-                      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 mb-4 shadow-lg">
-                        <FileBarChart className="h-10 w-10 text-white" />
-                      </div>
-                      <h3 className="text-3xl font-bold text-slate-900 mb-2">Informes Financieros</h3>
-                      <p className="text-slate-600 text-lg">
-                        Gestiona los documentos financieros de {client.company}
-                      </p>
-                    </div>
-
+                <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-slate-50 to-slate-100/50">
+                  <div className="max-w-6xl mx-auto">
                     {/* Upload Section */}
-                    <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
+                    {/* <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
                       <CardContent className="p-8">
                         <div className="space-y-6">
                           <div className="flex items-center gap-3 mb-4">
@@ -1141,7 +1183,6 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                             </div>
                           </div>
 
-                          {/* File Input */}
                           <div className="relative">
                             <input
                               type="file"
@@ -1170,7 +1211,6 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                             </label>
                           </div>
 
-                          {/* Selected Files List */}
                           {selectedFiles.length > 0 && (
                             <div className="space-y-2">
                               <p className="text-sm font-semibold text-slate-700 mb-3">
@@ -1207,7 +1247,6 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                             </div>
                           )}
 
-                          {/* Upload Progress */}
                           {isUploading && (
                             <div className="space-y-2">
                               <div className="flex items-center justify-between text-sm">
@@ -1223,7 +1262,6 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                             </div>
                           )}
 
-                          {/* Upload Button */}
                           <Button
                             onClick={handleUploadFiles}
                             disabled={selectedFiles.length === 0 || isUploading}
@@ -1243,49 +1281,79 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                           </Button>
                         </div>
                       </CardContent>
-                    </Card>
+                    </Card> */}
 
-                    {/* View Reports Section */}
-                    <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
-                      <CardContent className="p-8">
-                        <div className="flex flex-col items-center gap-6">
-                          <div className="text-center">
-                            <h4 className="text-xl font-bold text-slate-900 mb-2">Ver Informes Mensuales</h4>
-                            <p className="text-slate-600 mb-6">
-                              Consulta los reportes financieros procesados
+                    {/* View Reports Section - Material Design 3 */}
+                    <div className="bg-white rounded-[28px] shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-200/50">
+                      <div className="p-8">
+                        {isLoadingReportsData ? (
+                          <div className="flex flex-col items-center justify-center py-20 space-y-6">
+                            <div className="relative">
+                              <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center shadow-sm">
+                                <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+                              </div>
+                            </div>
+                            <div className="text-center space-y-2">
+                              <p className="text-lg font-semibold text-slate-900">Cargando reportes</p>
+                              <p className="text-sm text-slate-500">Obteniendo información financiera...</p>
+                            </div>
+                          </div>
+                        ) : availableReports.length === 0 ? (
+                          <div className="text-center py-20 px-6">
+                            <div className="mx-auto mb-6 h-24 w-24 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center shadow-sm">
+                              <AlertTriangle className="h-12 w-12 text-slate-400" />
+                            </div>
+                            <h4 className="text-xl font-bold text-slate-900 mb-3">Sin reportes disponibles</h4>
+                            <p className="text-slate-600 max-w-md mx-auto leading-relaxed">
+                              Sube documentos financieros para comenzar a generar reportes mensuales automatizados
                             </p>
                           </div>
-                          
-                          <div className="w-full grid grid-cols-2 gap-4 mb-4">
-                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-green-50 rounded-xl border border-green-200">
-                              <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
-                              <span className="font-medium">KPIs Automáticos</span>
+                        ) : (
+                          <div className="space-y-6">
+                            {/* Header with count */}
+                            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                              <div>
+                                <h3 className="text-2xl font-bold text-slate-900 tracking-tight">Reportes Mensuales</h3>
+                                <p className="text-sm text-slate-600 mt-1">
+                                  {availableReports.length} {availableReports.length === 1 ? 'reporte disponible' : 'reportes disponibles'}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                              <CheckCircle className="h-6 w-6 text-blue-600 flex-shrink-0" />
-                              <span className="font-medium">Balance General</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-purple-50 rounded-xl border border-purple-200">
-                              <CheckCircle className="h-6 w-6 text-purple-600 flex-shrink-0" />
-                              <span className="font-medium">Estado Resultados</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-slate-700 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                              <CheckCircle className="h-6 w-6 text-amber-600 flex-shrink-0" />
-                              <span className="font-medium">Datos Históricos</span>
+
+                            {/* Reports Grid - MD3 Style */}
+                            <div className="grid grid-cols-4 gap-4">
+                              {availableReports.map((report) => (
+                                <button
+                                  key={report.id}
+                                  onClick={() => handleMonthlyReportClick(report)}
+                                  className="group relative flex flex-col items-center gap-4 p-6 rounded-[20px] bg-gradient-to-br from-slate-50 to-white border border-slate-200/80 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-100/50 hover:-translate-y-1 transition-all duration-300 active:scale-[0.98]"
+                                >
+                                  {/* Icon Container - MD3 FAB style */}
+                                  <div className="relative">
+                                    <div className="h-16 w-16 rounded-[16px] bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md group-hover:shadow-xl group-hover:scale-110 transition-all duration-300">
+                                      <FileBarChart className="h-8 w-8 text-white" />
+                                    </div>
+                                    {/* Ripple effect indicator */}
+                                    <div className="absolute inset-0 rounded-[16px] bg-blue-400/0 group-hover:bg-blue-400/10 transition-colors duration-300" />
+                                  </div>
+
+                                  {/* Text Content */}
+                                  <div className="flex flex-col items-center gap-0.5 w-full">
+                                    <span className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors tracking-tight">
+                                      {report.month}
+                                    </span>
+                                    <span className="text-sm text-slate-600 font-medium">{report.year}</span>
+                                  </div>
+
+                                  {/* State layer */}
+                                  <div className="absolute inset-0 rounded-[20px] bg-blue-600/0 group-hover:bg-blue-600/5 transition-colors duration-300" />
+                                </button>
+                              ))}
                             </div>
                           </div>
-                          
-                          <Button
-                            onClick={() => setIsMonthlyReportsModalOpen(true)}
-                            className="w-full h-14 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold text-lg rounded-xl shadow-md hover:shadow-lg transition-all"
-                            size="lg"
-                          >
-                            <FileBarChart className="mr-3 h-6 w-6" />
-                            Abrir Informes Mensuales
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </TabsContent>
@@ -1323,13 +1391,37 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         isLoading={isLoadingDocument || isLoadingPreview}
       />
 
-      {/* Monthly Reports Modal */}
-      <MonthlyReportsModal
-        isOpen={isMonthlyReportsModalOpen}
-        onClose={() => setIsMonthlyReportsModalOpen(false)}
-        clientId={client.id}
-        clientName={client.company}
-      />
+      {/* Report Modal */}
+      {selectedReport && (
+        <ReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => {
+            setIsReportModalOpen(false)
+            setSelectedReport(null)
+          }}
+          clientId={client.id}
+          month={`${selectedReport.year}-${convertMonthNameToNumber(selectedReport.month)}`}
+          year={selectedReport.year}
+        />
+      )}
     </>
   )
+
+  function convertMonthNameToNumber(monthName: string): string {
+    const monthMap: Record<string, string> = {
+      Enero: "01",
+      Febrero: "02",
+      Marzo: "03",
+      Abril: "04",
+      Mayo: "05",
+      Junio: "06",
+      Julio: "07",
+      Agosto: "08",
+      Septiembre: "09",
+      Octubre: "10",
+      Noviembre: "11",
+      Diciembre: "12",
+    }
+    return monthMap[monthName] || "01"
+  }
 }
