@@ -14,6 +14,7 @@ import { DocumentViewerModal } from "@/components/DocumentViewerModal"
 
 interface FiscalIndicatorsProps {
   clientCompany: string
+  clientId?: string  // UUID del cliente (más confiable)
 }
 
 interface ContalinkFile {
@@ -42,7 +43,9 @@ interface ContalinkData {
   archivosIconos: ContalinkFile[]
 }
 
-export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
+export function FiscalIndicators({ clientCompany, clientId }: FiscalIndicatorsProps) {
+  console.log("🚀 ~ FiscalIndicators ~ clientCompany:", clientCompany)
+  console.log("🚀 ~ FiscalIndicators ~ clientId:", clientId)
   const [contalinkData, setContalinkData] = useState<ContalinkData | null>(null)
   const [isLoadingContalink, setIsLoadingContalink] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string | null>(null)
@@ -75,21 +78,30 @@ export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
 
   // Función para sincronizar datos fiscales (llama al proxy en NestJS)
   const handleSyncFiscal = async () => {
-    if (!contalinkData?.rfc) {
-      toast.error('No se puede sincronizar: el cliente no tiene RFC registrado')
+    // Priorizar clientId, luego RFC
+    if (!clientId && !contalinkData?.rfc) {
+      toast.error('No se puede sincronizar: el cliente no tiene ID ni RFC registrado')
       return
     }
 
     try {
       setIsSyncing(true)
       
+      const requestBody: any = {
+        year: parseInt(selectedYear),
+        month: parseInt(selectedMonth),
+      }
+
+      // Priorizar clientId sobre RFC
+      if (clientId) {
+        requestBody.clientId = clientId
+      } else if (contalinkData?.rfc) {
+        requestBody.rfc = contalinkData.rfc
+      }
+
       const response = await axiosInstance.post(
         '/contalink/sync-fiscal',
-        {
-          rfc: contalinkData.rfc,
-          year: parseInt(selectedYear),
-          month: parseInt(selectedMonth),
-        }
+        requestBody
       )
 
       if (response.data?.success) {
@@ -172,14 +184,25 @@ export function FiscalIndicators({ clientCompany }: FiscalIndicatorsProps) {
     try {
       setIsLoadingContalink(true)
       
+      // Construir request body con prioridad: clientId > RFC > nombre
+      const requestBody: any = {
+        year: parseInt(selectedYear),
+        month: parseInt(selectedMonth),
+        includePresignedUrls: true
+      }
+
+      // Prioridad: clientId (UUID - más confiable) > RFC > nombre
+      if (clientId) {
+        requestBody.clientId = clientId
+      } else if (contalinkData?.rfc) {
+        requestBody.rfc = contalinkData.rfc
+      } else {
+        requestBody.clientName = clientCompany
+      }
+      
       const response = await axiosInstance.post(
         '/contalink/obligations/client',
-        {
-          clientName: clientCompany,
-          year: parseInt(selectedYear),
-          month: parseInt(selectedMonth),
-          includePresignedUrls: true
-        }
+        requestBody
       )
 
       if (response.data?.success && response.data.data?.success && response.data.data.data) {

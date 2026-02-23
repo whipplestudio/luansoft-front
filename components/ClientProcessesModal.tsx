@@ -101,6 +101,7 @@ interface UrlCache {
 const URL_CACHE_TTL = 5 * 60 * 1000 // 5 minutos
 
 export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcessesModalProps) {
+  console.log("🚀 ~ ClientProcessesModal ~ client:", client)
   // Estados para procesos actuales
   const [currentProcesses, setCurrentProcesses] = useState<ProcessItem[]>([])
   const [isLoadingCurrent, setIsLoadingCurrent] = useState(false)
@@ -1365,7 +1366,10 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               >
                 <div className="h-full overflow-y-auto p-4">
                   {client?.company ? (
-                    <FiscalIndicators clientCompany={client.company} />
+                    <FiscalIndicators 
+                      clientCompany={client.company}
+                      clientId={client.id}
+                    />
                   ) : (
                     <div className="text-center py-12">
                       <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
