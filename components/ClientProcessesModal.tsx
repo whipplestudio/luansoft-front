@@ -154,6 +154,9 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  
+  // Estado para email del usuario (restricción de acceso)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   // Estados para filtro de rango de fechas
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -794,6 +797,19 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }
 
+  // Cargar email del usuario desde localStorage
+  useEffect(() => {
+    try {
+      const userData = localStorage.getItem("user")
+      if (userData) {
+        const user = JSON.parse(userData)
+        setUserEmail(user.email || null)
+      }
+    } catch (error) {
+      console.error("Error parsing user data:", error)
+    }
+  }, [])
+
   // Cargar datos cuando se abre el modal - REMOVED processhistory fetch
   useEffect(() => {
     if (isOpen && client) {
@@ -948,7 +964,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className={`grid w-full ${userEmail === 'a.pulido@whipple.mx' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <TabsTrigger value="fiscal-indicators" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Indicadores Fiscales
@@ -957,10 +973,12 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                   <Archive className="h-4 w-4" />
                   Explorador de Documentos ({totalDocuments})
                 </TabsTrigger>
-                <TabsTrigger value="monthly-reports" className="flex items-center gap-2">
-                  <FileBarChart className="h-4 w-4" />
-                  Informes Mensuales
-                </TabsTrigger>
+                {userEmail === 'a.pulido@whipple.mx' && (
+                  <TabsTrigger value="monthly-reports" className="flex items-center gap-2">
+                    <FileBarChart className="h-4 w-4" />
+                    Informes Mensuales
+                  </TabsTrigger>
+                )}
               </TabsList>
             </Tabs>
           </div>
@@ -1161,15 +1179,16 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 </div>
               </TabsContent>
 
-              {/* Monthly Reports Tab */}
-              <TabsContent
-                value="monthly-reports"
-                className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
-              >
-                <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-slate-50 to-slate-100/50">
-                  <div className="max-w-6xl mx-auto">
-                    {/* Upload Section */}
-                    {/* <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
+              {/* Monthly Reports Tab - Solo para a.pulido@whipple.mx */}
+              {userEmail === 'a.pulido@whipple.mx' && (
+                <TabsContent
+                  value="monthly-reports"
+                  className="h-full overflow-auto flex flex-col mt-0 data-[state=inactive]:hidden"
+                >
+                  <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-slate-50 to-slate-100/50">
+                    <div className="max-w-6xl mx-auto">
+                      {/* Upload Section */}
+                      <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden mb-6">
                       <CardContent className="p-8">
                         <div className="space-y-6">
                           <div className="flex items-center gap-3 mb-4">
@@ -1282,7 +1301,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                           </Button>
                         </div>
                       </CardContent>
-                    </Card> */}
+                    </Card>
 
                     {/* View Reports Section - Material Design 3 */}
                     <div className="bg-white rounded-[28px] shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-slate-200/50">
@@ -1358,6 +1377,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                   </div>
                 </div>
               </TabsContent>
+              )}
 
               {/* Fiscal Indicators */}
               <TabsContent
