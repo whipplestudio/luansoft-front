@@ -29,6 +29,7 @@ const clientSchema = z.object({
   company: z.string().min(1, "La empresa es requerida"),
   type: z.enum(["FISICA", "MORAL"]),
   regimenFiscalId: z.string().min(1, "El régimen fiscal es requerido"),
+  rfc: z.string().optional(),
   contract: z.instanceof(File).optional(),
 })
 
@@ -40,6 +41,7 @@ interface Client {
   type: "FISICA" | "MORAL"
   status: "ACTIVE" | "INACTIVE"
   regimenFiscalId?: string
+  rfc?: string
   contractFile?: {
     id: string
     originalName: string
@@ -75,6 +77,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       company: "",
       type: "FISICA",
       regimenFiscalId: "",
+      rfc: "",
       contract: undefined,
     },
   })
@@ -162,6 +165,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
         company: client.company,
         type: client.type,
         regimenFiscalId: client.regimenFiscalId || "",
+        rfc: client.rfc || "",
       })
 
       // Verificar si el cliente tiene contrato
@@ -177,6 +181,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
         company: "",
         type: "FISICA",
         regimenFiscalId: "",
+        rfc: "",
         contract: undefined,
       })
       setHasExistingContract(false)
@@ -197,6 +202,9 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       formData.append("company", data.company)
       formData.append("type", data.type)
       formData.append("regimenFiscalId", data.regimenFiscalId)
+      if (data.rfc) {
+        formData.append("rfc", data.rfc)
+      }
 
       // Añadir archivo si existe
       if (selectedFile) {
@@ -283,6 +291,7 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
       company: "",
       type: "FISICA",
       regimenFiscalId: "",
+      rfc: "",
       contract: undefined,
     })
     setSelectedFile(null)
@@ -342,6 +351,11 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
               )}
             />
             {errors.regimenFiscalId && <p className="text-red-500 text-sm">{errors.regimenFiscalId.message}</p>}
+          </div>
+          <div>
+            <Label htmlFor="rfc">RFC (Opcional)</Label>
+            <Controller name="rfc" control={control} render={({ field }) => <Input {...field} placeholder="XAXX010101000" />} />
+            {errors.rfc && <p className="text-red-500 text-sm">{errors.rfc.message}</p>}
           </div>
           <div>
             <Label htmlFor="contract">Contrato (Opcional)</Label>
