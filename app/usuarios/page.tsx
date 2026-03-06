@@ -239,7 +239,6 @@ export default function UsuariosPage() {
       id: "actions",
       cell: ({ row }) => {
         const user = row.original
-        const isEditableRole = canEditUser(user.role)
 
         return (
           <DropdownMenu>
@@ -251,9 +250,9 @@ export default function UsuariosPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-              {isEditableRole && <DropdownMenuItem onClick={() => handleEdit(user)}>Editar</DropdownMenuItem>}
+              <DropdownMenuItem onClick={() => handleEdit(user)}>Editar</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleViewDetails(user)}>Ver detalles</DropdownMenuItem>
-              {user.status === "active" && isEditableRole && (
+              {user.status === "active" && (
                 <DropdownMenuItem onClick={() => handleDelete(user)} className="text-red-600">
                   Eliminar
                 </DropdownMenuItem>
