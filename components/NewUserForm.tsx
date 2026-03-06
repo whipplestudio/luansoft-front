@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import type { User } from "@/types"
 import axiosInstance from "@/api/config"
 
@@ -19,7 +20,9 @@ const userSchema = z.object({
   lastName: z.string().min(2, { message: "El apellido debe tener al menos 2 caracteres" }),
   email: z.string().email({ message: "Email inválido" }),
   role: z.enum(["ADMINISTRADOR", "DASHBOARD"]),
-  password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres" }).optional(),
+  password: z.string().optional().refine((val) => !val || val.length >= 6, {
+    message: "La contraseña debe tener al menos 6 caracteres"
+  }),
 })
 
 type UserFormData = z.infer<typeof userSchema>
@@ -31,6 +34,8 @@ interface NewUserFormProps {
 
 export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
+  const [pendingData, setPendingData] = useState<UserFormData | null>(null)
 
   const {
     register,
@@ -60,8 +65,9 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
     }
   }, [user, reset])
 
-  const onSubmit = async (data: UserFormData) => {
+  const processSubmit = async (data: UserFormData) => {
     setIsSubmitting(true)
+    
     try {
       const token = localStorage.getItem("accessToken")
       if (!token) {
@@ -78,6 +84,11 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
         if (typedKey === "role") {
           // Validamos que el valor de "role" sea uno de los valores permitidos
           if (value === "ADMINISTRADOR" || value === "DASHBOARD") {
+            apiData[typedKey] = value;
+          }
+        } else if (typedKey === "password") {
+          // Solo incluir contraseña si no está vacía
+          if (value && value.trim() !== "") {
             apiData[typedKey] = value;
           }
         } else if (value !== undefined) {
@@ -119,6 +130,8 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
       }
 
       reset()
+      setShowPasswordConfirm(false)
+      setPendingData(null)
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
@@ -136,8 +149,38 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
     }
   }
 
+  const onSubmit = async (data: UserFormData) => {
+    // Validar que la contraseña sea obligatoria en modo creación
+    if (!user && !data.password) {
+      toast.error("La contraseña es obligatoria al crear un usuario")
+      return
+    }
+
+    // Si es modo edición y se está intentando cambiar la contraseña, mostrar confirmación
+    if (user && data.password && data.password.trim() !== "") {
+      setPendingData(data)
+      setShowPasswordConfirm(true)
+      return
+    }
+
+    // Si no es cambio de contraseña, proceder directamente
+    await processSubmit(data)
+  }
+
+  const handleConfirmPasswordChange = async () => {
+    if (pendingData) {
+      await processSubmit(pendingData)
+    }
+  }
+
+  const handleCancelPasswordChange = () => {
+    setShowPasswordConfirm(false)
+    setPendingData(null)
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div>
         <Label htmlFor="firstName">Nombre</Label>
         <Input id="firstName" {...register("firstName")} />
@@ -156,13 +199,12 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
         {errors.email && <p className="text-red-500 text-sm">{errors.email.message}</p>}
       </div>
 
-      {!user && (
-        <div>
-          <Label htmlFor="password">Contraseña</Label>
-          <Input id="password" type="password" {...register("password")} />
-          {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
-        </div>
-      )}
+      <div>
+        <Label htmlFor="password">Contraseña</Label>
+        <Input id="password" type="password" {...register("password")} placeholder={user ? "Dejar en blanco para mantener la actual" : ""} />
+        {errors.password && <p className="text-red-500 text-sm">{errors.password.message}</p>}
+        {user && <p className="text-gray-500 text-xs mt-1">Dejar en blanco si no deseas cambiar la contraseña</p>}
+      </div>
 
       <div>
         <Label htmlFor="role">Rol</Label>
@@ -186,6 +228,35 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
         {isSubmitting ? "Guardando..." : user ? "Actualizar Usuario" : "Crear Usuario"}
       </Button>
     </form>
+
+    <Dialog open={showPasswordConfirm} onOpenChange={setShowPasswordConfirm}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmar cambio de contraseña</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-600">
+          ¿Estás seguro de que deseas cambiar la contraseña de este usuario?
+        </p>
+        <DialogFooter className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCancelPasswordChange}
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            onClick={handleConfirmPasswordChange}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Guardando..." : "Confirmar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 
