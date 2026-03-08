@@ -44,8 +44,7 @@ interface ContalinkData {
 }
 
 export function FiscalIndicators({ clientCompany, clientId }: FiscalIndicatorsProps) {
-  console.log("🚀 ~ FiscalIndicators ~ clientCompany:", clientCompany)
-  console.log("🚀 ~ FiscalIndicators ~ clientId:", clientId)
+
   const [contalinkData, setContalinkData] = useState<ContalinkData | null>(null)
   const [isLoadingContalink, setIsLoadingContalink] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string | null>(null)
