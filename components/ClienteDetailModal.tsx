@@ -65,6 +65,18 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
   // Estado para email del usuario (restricción de acceso)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
+  // Cargar email del usuario y reportes cuando se abre el modal
+  useEffect(() => {
+    if (isOpen && client) {
+      // Obtener email del usuario
+      const email = localStorage.getItem('userEmail')
+      setUserEmail(email)
+      
+      // Cargar reportes disponibles
+      loadAvailableReports()
+    }
+  }, [isOpen, client])
+
   if (!client) return null
 
   // Handle monthly report example download with progress
@@ -314,18 +326,6 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
     }
     return monthMap[monthName] || "01"
   }
-
-  // Cargar email del usuario y reportes cuando se abre el modal
-  useEffect(() => {
-    if (isOpen && client) {
-      // Obtener email del usuario
-      const email = localStorage.getItem('userEmail')
-      setUserEmail(email)
-      
-      // Cargar reportes disponibles
-      loadAvailableReports()
-    }
-  }, [isOpen, client])
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
