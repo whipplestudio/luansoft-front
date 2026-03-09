@@ -57,6 +57,16 @@ export function FiscalIndicators({ clientCompany, clientId }: FiscalIndicatorsPr
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadingFileName, setDownloadingFileName] = useState("")
   const [isSyncing, setIsSyncing] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  // Obtener rol del usuario desde localStorage
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    setUserRole(role)
+  }, [])
+
+  // Verificar si el usuario puede sincronizar (solo admin y contador)
+  const canSync = userRole === 'admin' || userRole === 'contador'
 
   // Función para obtener el mes anterior
   const getPreviousMonth = () => {
@@ -437,24 +447,26 @@ export function FiscalIndicators({ clientCompany, clientId }: FiscalIndicatorsPr
                   'Aplicar'
                 )}
               </Button>
-              <Button
-                onClick={handleSyncFiscal}
-                disabled={isLoadingContalink || isSyncing || !contalinkData?.rfc}
-                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-2"
-                title={!contalinkData?.rfc ? 'Cliente sin RFC registrado' : 'Sincronizar datos desde Contalink (Cloud Run)'}
-              >
-                {isSyncing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sincronizando...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Sincronizar
-                  </>
-                )}
-              </Button>
+              {canSync && (
+                <Button
+                  onClick={handleSyncFiscal}
+                  disabled={isLoadingContalink || isSyncing || !contalinkData?.rfc}
+                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-2"
+                  title={!contalinkData?.rfc ? 'Cliente sin RFC registrado' : 'Sincronizar datos desde Contalink (Cloud Run)'}
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sincronizando...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Sincronizar
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
