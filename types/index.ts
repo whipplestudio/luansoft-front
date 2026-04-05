@@ -204,6 +204,7 @@ export interface ApiClient {
     }
   }[]
   completionPercentage: string
+  isContalink?: boolean
 }
 export interface FiscalDeliverable {
   id: string
@@ -217,6 +218,7 @@ export interface FiscalDeliverable {
   processes: Process[]
   progressPercentage: number
   originalData: ApiClient
+  isContalink?: boolean
 }
 
 export interface Document {

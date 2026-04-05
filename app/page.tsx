@@ -82,6 +82,7 @@ const mapApiClientToFiscalDeliverable = (client: ApiClient): FiscalDeliverable =
     observations: "",
     processes: mappedProcesses,
     progressPercentage: completionPercentage,
+    isContalink: client.isContalink || false,
     // Añadir campos adicionales para mantener la información original
     originalData: client,
   }
@@ -106,7 +107,44 @@ const parseCompletionPercentage = (percentage: string): number => {
 }
 
 // Función para determinar el estado del dot basado en los procesos del cliente
-const getDotStatus = (processes: Process[]) => {
+const getDotStatus = (client: FiscalDeliverable) => {
+  const { processes, isContalink, progressPercentage } = client
+
+  // LÓGICA ESPECIAL PARA CLIENTES CONTALINK
+  if (isContalink) {
+    // Si es cliente Contalink con 0% (sin obligaciones sincronizadas), mostrar rojo
+    if (progressPercentage === 0) {
+      return {
+        color: "bg-red-500",
+        tooltip: "Sin datos fiscales sincronizados",
+      }
+    }
+    
+    // Si tiene datos (>0%), el color depende del porcentaje
+    if (progressPercentage === 100) {
+      return {
+        color: "bg-green-500",
+        tooltip: "Cumplimiento fiscal completo",
+      }
+    } else if (progressPercentage >= 70) {
+      return {
+        color: "bg-green-500",
+        tooltip: `Cumplimiento fiscal: ${progressPercentage}%`,
+      }
+    } else if (progressPercentage >= 40) {
+      return {
+        color: "bg-yellow-500",
+        tooltip: `Cumplimiento fiscal: ${progressPercentage}%`,
+      }
+    } else {
+      return {
+        color: "bg-red-500",
+        tooltip: `Cumplimiento fiscal: ${progressPercentage}%`,
+      }
+    }
+  }
+
+  // LÓGICA LEGACY PARA CLIENTES NO-CONTALINK
   if (!processes || processes.length === 0) {
     return {
       color: "bg-gray-500",
@@ -296,11 +334,11 @@ const InfiniteScrollDisplay = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div
-                        className={`h-2 w-2 rounded-full mr-1 ${getDotStatus(item.processes).color} cursor-help`}
+                        className={`h-2 w-2 rounded-full mr-1 ${getDotStatus(item).color} cursor-help`}
                       ></div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{getDotStatus(item.processes).tooltip}</p>
+                      <p>{getDotStatus(item).tooltip}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -1498,11 +1536,11 @@ export default function DashboardPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <div
-                                  className={`h-2 w-2 rounded-full mr-1 ${getDotStatus(item.processes).color} cursor-help`}
+                                  className={`h-2 w-2 rounded-full mr-1 ${getDotStatus(item).color} cursor-help`}
                                 ></div>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{getDotStatus(item.processes).tooltip}</p>
+                                <p>{getDotStatus(item).tooltip}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
