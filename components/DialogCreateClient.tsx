@@ -264,23 +264,9 @@ export function DialogCreateClient({ isOpen, onOpenChange, client, onSuccess }: 
         toast.success(client ? "Cliente actualizado exitosamente" : "Cliente creado exitosamente")
         onSuccess()
         handleClose()
-      } else {
-        throw new Error(response.data.message || "Error al procesar la solicitud")
-      }
+      } 
     } catch (error) {
       console.error("Error:", error)
-      if (axios.isAxiosError(error) && error.response) {
-        const { status, data } = error.response
-        if (status === 404) {
-          toast.error("Cliente no encontrado")
-        } else if (status === 409) {
-          toast.error("El correo electrónico ya está registrado")
-        } else {
-          toast.error(data.message || "Error al procesar la solicitud")
-        }
-      } else {
-        toast.error("Error de conexión. Por favor, intente nuevamente")
-      }
     } finally {
       setIsSubmitting(false)
     }
