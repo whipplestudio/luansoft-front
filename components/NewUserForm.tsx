@@ -19,7 +19,7 @@ const userSchema = z.object({
   firstName: z.string().min(2, { message: "El nombre debe tener al menos 2 caracteres" }),
   lastName: z.string().min(2, { message: "El apellido debe tener al menos 2 caracteres" }),
   email: z.string().email({ message: "Email inválido" }),
-  role: z.enum(["ADMINISTRADOR", "DASHBOARD"]),
+  role: z.enum(["ADMINISTRADOR", "DASHBOARD", "CONTACTO"]),
   password: z.string().optional().refine((val) => !val || val.length >= 6, {
     message: "La contraseña debe tener al menos 6 caracteres"
   }),
@@ -83,7 +83,7 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
         const value = data[typedKey];
         if (typedKey === "role") {
           // Validamos que el valor de "role" sea uno de los valores permitidos
-          if (value === "ADMINISTRADOR" || value === "DASHBOARD") {
+          if (value === "ADMINISTRADOR" || value === "DASHBOARD" || value === "CONTACTO") {
             apiData[typedKey] = value;
           }
         } else if (typedKey === "password") {
@@ -219,6 +219,7 @@ export function NewUserForm({ onSuccess, user }: NewUserFormProps) {
           <SelectContent>
             <SelectItem value="ADMINISTRADOR">Administrador</SelectItem>
             <SelectItem value="DASHBOARD">Dashboard</SelectItem>
+            <SelectItem value="CONTACTO">Contacto</SelectItem>
           </SelectContent>
         </Select>
         {errors.role && <p className="text-red-500 text-sm">{errors.role.message}</p>}
