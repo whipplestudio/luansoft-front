@@ -6,7 +6,7 @@ import { DataTable } from "@/components/data-table"
 import { columns } from "./columns"
 import type { Contacto } from "@/types"
 import { axiosInstance } from "@/lib/axios"
-import { useToast } from "@/components/ui/use-toast"
+import { Toaster, toast } from "sonner"
 import { ArrowDown, ArrowUp, UserPlus } from "lucide-react"
 import { ContactoForm } from "@/components/ContactoForm"
 import { ContactoDetails } from "@/components/ContactoDetails"
@@ -27,7 +27,7 @@ interface ContactosResponse {
 }
 
 export default function ContactosPage() {
-  const { toast } = useToast()
+
   const [contactos, setContactos] = useState<Contacto[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -76,19 +76,11 @@ export default function ContactosPage() {
           setTotalItems(response.data.data.total)
         } else {
           console.error("Error en la respuesta de la API:", response.data.message)
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los contactos",
-            variant: "destructive",
-          })
+          toast.error("No se pudieron cargar los contactos")
         }
       } catch (error) {
         console.error("Error al obtener contactos:", error)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los contactos",
-          variant: "destructive",
-        })
+        toast.error("No se pudieron cargar los contactos")
       } finally {
         setIsLoading(false)
       }
@@ -178,10 +170,7 @@ export default function ContactosPage() {
         const response = await axiosInstance.patch(`/contacto/${originalData.id}`, data)
 
         if (response.data.success) {
-          toast({
-            title: "Éxito",
-            description: "Contacto actualizado correctamente",
-          })
+          toast.success("Contacto actualizado correctamente")
           fetchContactos() // Recargar la lista
           setIsFormOpen(false) // Cerrar el formulario después de actualizar
         } else {
@@ -189,12 +178,12 @@ export default function ContactosPage() {
         }
       } else {
         // Crear nuevo contacto
+        console.log("Entro1");
+        
         const response = await axiosInstance.post("/contacto", data)
+        console.log("🚀 ~ handleSubmitContacto ~ response:", response)
         if (response.data.success) {
-          toast({
-            title: "Éxito",
-            description: "Contacto creado correctamente",
-          })
+          toast.success("Contacto creado correctamente")
           fetchContactos() // Recargar la lista
           setIsFormOpen(false) // Cerrar el formulario después de crear
         } else {
@@ -203,11 +192,7 @@ export default function ContactosPage() {
       }
     } catch (error: any) {
       console.error("Error al guardar contacto:", error)
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo guardar el contacto",
-        variant: "destructive",
-      })
+       toast.error(error.response?.data?.message || "Error al guardar el contacto")
       throw error // Re-lanzar para que el formulario pueda manejarlo
     } finally {
       setIsSubmitting(false)
@@ -225,21 +210,14 @@ export default function ContactosPage() {
       const response = await axiosInstance.delete(`/contacto/${selectedContacto.id}`)
 
       if (response.data.success) {
-        toast({
-          title: "Éxito",
-          description: "Contacto eliminado correctamente",
-        })
+        toast.success("Contacto eliminado correctamente")
         fetchContactos() // Recargar la lista
       } else {
         throw new Error(response.data.message || "Error al eliminar el contacto")
       }
     } catch (error: any) {
       console.error("Error al eliminar contacto:", error)
-      toast({
-        title: "Error",
-        description: error.message || "No se pudo eliminar el contacto",
-        variant: "destructive",
-      })
+      toast.error(error.message || "No se pudo eliminar el contacto")
     } finally {
       setIsDeleteOpen(false)
       setIsSubmitting(false)
