@@ -28,6 +28,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
 import { ClientProcessesModal } from "@/components/ClientProcessesModal"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const GRID_ITEMS_PER_PAGE = 100
 const DEFAULT_TABLE_ITEMS_PER_PAGE = 20
@@ -430,6 +431,7 @@ export default function DashboardPage() {
   const [isClientProcessesModalOpen, setIsClientProcessesModalOpen] = useState(false)
   const [selectedClientForProcesses, setSelectedClientForProcesses] = useState<FiscalDeliverable | null>(null)
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
+  const [isSendReportsModalOpen, setIsSendReportsModalOpen] = useState(false)
 
   // Función para obtener la URL de descarga de un archivo
   const getFileDownloadUrl = async (fileId: string): Promise<string | null> => {
@@ -1428,7 +1430,7 @@ export default function DashboardPage() {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            onClick={handleSendMonthlyReports}
+                            onClick={() => setIsSendReportsModalOpen(true)}
                             className="h-8 px-3 ml-1 bg-primary text-on-primary hover:bg-primary/90 rounded-lg text-sm font-medium shadow-elevation-1 hover:shadow-elevation-2 transition-all"
                           >
                             <Mail className="mr-1.5 h-4 w-4" />
@@ -1776,6 +1778,65 @@ export default function DashboardPage() {
           onClose={() => setIsClientProcessesModalOpen(false)}
           client={selectedClientForProcesses}
         />
+
+        {/* Modal de confirmación para enviar reportes */}
+        <Dialog open={isSendReportsModalOpen} onOpenChange={setIsSendReportsModalOpen}>
+          <DialogContent className="max-w-md mx-4">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                  <Mail className="h-6 w-6 text-amber-600" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-semibold text-slate-900">Confirmar envío de reportes</DialogTitle>
+                  <p className="text-sm text-slate-600">Esta acción enviará reportes a todos los clientes activos</p>
+                </div>
+              </div>
+            </DialogHeader>
+            
+            <div className="bg-slate-50 rounded-lg p-4 mb-6">
+              <p className="text-sm font-medium text-slate-700 mb-2">Detalles del envío:</p>
+              <div className="space-y-1">
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium">Mes:</span> {selectedMonth ? [
+                    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+                  ][parseInt(selectedMonth) - 1] : 'No seleccionado'}
+                </p>
+                <p className="text-sm text-slate-600">
+                  <span className="font-medium">Año:</span> {selectedYear}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
+              <p className="text-xs text-amber-800">
+                ⚠️ Esta acción enviará emails a todos los clientes con datos disponibles para el período seleccionado. 
+                Los reportes se generarán automáticamente con los datos financieros más recientes.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setIsSendReportsModalOpen(false)}
+                className="px-4 py-2"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={async () => {
+                  await handleSendMonthlyReports()
+                  setIsSendReportsModalOpen(false)
+                }}
+                className="px-4 py-2 bg-primary text-on-primary hover:bg-primary/90"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Enviar Reportes
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </>
     )
   }
