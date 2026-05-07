@@ -47,6 +47,7 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
   console.log("🚀 ~ ReportContentDynamic ~ month:", month)
   console.log("🚀 ~ ReportContentDynamic ~ clientId:", clientId)
   const [clientData, setClientData] = useState<ClienteFinancialData | null>(null)
+  console.log("🚀 ~ ReportContentDynamic ~ clientData:", clientData)
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -131,28 +132,54 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
     const yearData = clientData.years[year.toString()]
     if (!yearData) return null
 
-    const erPeriodo = yearData.estadoResultadosPeriodo.find((er) => er.mes === month)
-    const erYTD = yearData.estadoResultadosYTD.find((er) => er.mes === month)
+    // El backend guarda el mes en formato "YYYY-MM" (ej: "2026-03")
+    // El mes puede venir como "03" o "2026-03", así que normalizamos
+    const fullMonthKey = month.includes("-") ? month : `${year}-${month}`
+    
+    const erPeriodo = yearData.estadoResultadosPeriodo.find((er) => er.mes === fullMonthKey)
+    const erYTD = yearData.estadoResultadosYTD.find((er) => er.mes === fullMonthKey)
     
     // Buscar balance general para el mes específico
-    let bg = yearData.balanceGeneral.find((b) => b.mes === month)
+    let bg = yearData.balanceGeneral.find((b) => b.mes === fullMonthKey)
     
     // Si no existe balance para este mes, usar el más reciente disponible
     if (!bg && yearData.balanceGeneral.length > 0) {
       // Ordenar balances por mes y tomar el más reciente que sea <= al mes solicitado
       const sortedBalances = [...yearData.balanceGeneral].sort((a, b) => a.mes.localeCompare(b.mes))
-      bg = sortedBalances.reverse().find((b) => b.mes <= month) || sortedBalances[sortedBalances.length - 1]
+      bg = sortedBalances.reverse().find((b) => b.mes <= fullMonthKey) || sortedBalances[sortedBalances.length - 1]
     }
 
     if (!erPeriodo || !erYTD || !bg) return null
 
-    const kpis = calcularKPIsFinancieros(erPeriodo, bg)
+    // Compatibilidad: si ac o pc son 0, calcularlos de las subcuentas (datos antiguos)
+    const normalizedBg = { ...bg }
+    if (normalizedBg.ac === 0) {
+      // AC = Bancos + Deudores + Inventario (aproximación para CONTPAQi)
+      normalizedBg.ac = (normalizedBg.bancos || 0) + 
+                        (normalizedBg.deudores || 0) + 
+                        (normalizedBg.inventario || 0) +
+                        (normalizedBg.inversiones || 0) +
+                        (normalizedBg.clientes || 0)
+    }
+    if (normalizedBg.pc === 0) {
+      // PC se calculará como diferencia o se usará un valor estimado
+      // Para datos antiguos sin PC, usamos un valor que permita calcular ratios
+      normalizedBg.pc = normalizedBg.ac * 0.5 // Estimación conservadora
+    }
+    if (normalizedBg.capital === 0 && normalizedBg.utilidadEj) {
+      normalizedBg.capital = normalizedBg.utilidadEj
+    }
+
+    const kpis = calcularKPIsFinancieros(erPeriodo, normalizedBg)
     const recomendaciones = generarRecomendaciones(kpis, erPeriodo)
 
     const previousYearData = clientData.years[(year - 1).toString()]
     let variacion = null
     if (previousYearData) {
-      const erPreviousYear = previousYearData.estadoResultadosPeriodo.find((er) => er.mes.endsWith(month.split("-")[1]))
+      // Buscar el mes anterior en formato "YYYY-MM" del año previo
+      const monthPart = month.includes("-") ? month.split("-")[1] : month
+      const prevYearMonthKey = `${year - 1}-${monthPart}`
+      const erPreviousYear = previousYearData.estadoResultadosPeriodo.find((er) => er.mes === prevYearMonthKey)
       if (erPreviousYear) {
         variacion = calcularVariacionPeriodos(erPeriodo, erPreviousYear)
       }
@@ -174,14 +201,29 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
       .forEach((y) => {
         const yData = clientData.years[y]
         yData.balanceGeneral.forEach((b: BalanceGeneral) => {
-          allBalances.push({ ...b, anio: parseInt(y) })
+          // Normalizar cada balance para compatibilidad con datos antiguos
+          const normalizedB = { ...b }
+          if (normalizedB.ac === 0) {
+            normalizedB.ac = (normalizedB.bancos || 0) + 
+                              (normalizedB.deudores || 0) + 
+                              (normalizedB.inventario || 0) +
+                              (normalizedB.inversiones || 0) +
+                              (normalizedB.clientes || 0)
+          }
+          if (normalizedB.pc === 0) {
+            normalizedB.pc = normalizedB.ac * 0.5
+          }
+          if (normalizedB.capital === 0 && normalizedB.utilidadEj) {
+            normalizedB.capital = normalizedB.utilidadEj
+          }
+          allBalances.push({ ...normalizedB, anio: parseInt(y) })
         })
       })
 
     return {
       erPeriodo,
       erYTD,
-      bg,
+      bg: normalizedBg,
       kpis,
       recomendaciones,
       variacion,
@@ -189,6 +231,7 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
       allBalances,
     }
   }, [clientData, year, month])
+  console.log("🚀 ~ ReportContentDynamic ~ reportData:", reportData)
 
   if (isLoading) {
     return (
@@ -216,6 +259,7 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
   }
 
   const { erPeriodo, erYTD, bg, kpis, recomendaciones, variacion, allPeriodos, allBalances } = reportData
+  console.log("🚀 ~ ReportContentDynamic ~ allPeriodos:", allPeriodos)
 
   const cardsTop = [
     {
@@ -493,7 +537,7 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
                   {allPeriodos.map((row, idx) => (
                     <tr
                       key={idx}
-                      className={`border-b border-slate-100 hover:bg-slate-50 ${row.mes === month && row.anio === year ? "bg-[#ffe48b]/20" : ""}`}
+                      className={`border-b border-slate-100 hover:bg-slate-50 ${(row.mes === month || row.mes.endsWith(month)) && row.anio === year ? "bg-[#ffe48b]/20" : ""}`}
                     >
                       <td className="p-4 font-medium text-slate-700">
                         {getMonthName(row.mes)} {row.anio}
@@ -505,7 +549,13 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
                         {formatCurrency(row.utilidad)}
                       </td>
                       <td className="text-right p-4 text-slate-600">
-                        {formatPercentage(row.utilidad / row.ingresos)}
+                        {(row.ingresos && row.ingresos !== 0 && !isNaN(row.utilidad / row.ingresos)) 
+                          ? formatPercentage(row.utilidad / row.ingresos) 
+                          : (
+                            <span className="text-slate-400 italic text-xs">
+                              Sin ingresos
+                            </span>
+                          )}
                       </td>
                     </tr>
                   ))}
@@ -538,14 +588,16 @@ export function ReportContentDynamic({ clientId, month, year, onClose }: ReportC
                   {allBalances.map((row, idx) => (
                     <tr
                       key={idx}
-                      className={`border-b border-slate-100 hover:bg-slate-50 ${row.mes === month && row.anio === year ? "bg-[#ffe48b]/20" : ""}`}
+                      className={`border-b border-slate-100 hover:bg-slate-50 ${(row.mes === month || row.mes.endsWith(month)) && row.anio === year ? "bg-[#ffe48b]/20" : ""}`}
                     >
                       <td className="p-4 font-medium text-slate-700">
                         {getMonthName(row.mes)} {row.anio}
                       </td>
                       <td className="text-right p-4 text-slate-600">{formatCurrency(row.ac)}</td>
                       <td className="text-right p-4 text-slate-600">{formatCurrency(row.pc)}</td>
-                      <td className="text-right p-4 font-semibold text-green-600">{(row.ac / row.pc).toFixed(2)}</td>
+                      <td className="text-right p-4 font-semibold text-green-600">
+                        {row.pc !== 0 ? (row.ac / row.pc).toFixed(2) : "N/A"}
+                      </td>
                       <td className="text-right p-4 text-slate-600">{formatCurrency(row.ac - row.pc)}</td>
                     </tr>
                   ))}

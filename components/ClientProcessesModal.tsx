@@ -154,6 +154,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
   
   // Estado para email y rol del usuario (restricción de acceso)
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -740,6 +741,36 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    const pdfFiles = files.filter(file => file.type === 'application/pdf')
+    
+    if (pdfFiles.length === 0) {
+      toast.error('Solo se permiten archivos PDF')
+      return
+    }
+
+    setSelectedFiles(prev => [...prev, ...pdfFiles])
+    toast.success(`${pdfFiles.length} archivo(s) PDF añadido(s)`)
+  }
+
   // Función para subir archivos
   const handleUploadFiles = async () => {
     if (!client?.originalData?.id || selectedFiles.length === 0) {
@@ -765,8 +796,8 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       setSelectedFiles([])
       setUploadProgress(0)
       
-      // Refresh data if needed
-      // fetchCurrentProcesses()
+      // Refresh reports data after upload
+      await loadAvailableReports()
     } catch (error: any) {
       console.error('Error uploading files:', error)
       toast.error(error.response?.data?.message || 'Error al subir los archivos', { duration: 5000 })
@@ -1214,13 +1245,18 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                               className="hidden"
                               disabled={isUploading}
                             />
-                            <label
-                              htmlFor="pdf-upload"
+                            <div
                               className={`flex flex-col items-center justify-center w-full h-40 border-3 border-dashed rounded-2xl cursor-pointer transition-all ${
                                 isUploading
                                   ? 'border-slate-300 bg-slate-50 cursor-not-allowed'
+                                  : isDragging
+                                  ? 'border-blue-500 bg-blue-100'
                                   : 'border-blue-300 bg-blue-50 hover:bg-blue-100 hover:border-blue-400'
                               }`}
+                              onDragOver={handleDragOver}
+                              onDragLeave={handleDragLeave}
+                              onDrop={handleDrop}
+                              onClick={() => document.getElementById('pdf-upload')?.click()}
                             >
                               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                 <FileType className={`w-12 h-12 mb-3 ${isUploading ? 'text-slate-400' : 'text-blue-500'}`} />
@@ -1229,7 +1265,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                                 </p>
                                 <p className="text-xs text-slate-500">Solo archivos PDF (múltiples archivos permitidos)</p>
                               </div>
-                            </label>
+                            </div>
                           </div>
 
                           {selectedFiles.length > 0 && (

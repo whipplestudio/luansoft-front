@@ -23,7 +23,6 @@ import { useRouter } from "next/navigation"
 import { axiosInstance } from "@/lib/axios"
 import axios from "axios"
 import { toast } from "sonner"
-import { debounce } from "lodash"
 import { Logo } from "@/components/Logo"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentViewerModal } from "@/components/DocumentViewerModal"
@@ -430,6 +429,7 @@ export default function DashboardPage() {
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isClientProcessesModalOpen, setIsClientProcessesModalOpen] = useState(false)
   const [selectedClientForProcesses, setSelectedClientForProcesses] = useState<FiscalDeliverable | null>(null)
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false)
 
   // Función para obtener la URL de descarga de un archivo
   const getFileDownloadUrl = async (fileId: string): Promise<string | null> => {
@@ -877,7 +877,7 @@ export default function DashboardPage() {
   // Cargar datos iniciales
   // Update the useEffect to call fetchContacts
 
-  // Manejar cambios en los filtros
+  // Manejar cambios en los filtros (inmediato para ciertos casos)
   const handleFilter = (key: string, value: any) => {
     setFilters((prev) => {
       const newFilters = { ...prev, [key]: value }
@@ -935,66 +935,79 @@ export default function DashboardPage() {
     fetchClients(1, newPerPage, filters)
   }
 
-  // Debounced function para el filtro de empresa
-  const debouncedCompanyFilter = useCallback(
-    debounce((value: string) => {
-      handleFilter("companyName", value)
-    }, 500),
-    [handleFilter],
-  )
-
-  // Primero, vamos a modificar el componente FilterContent para usar un estado local y un useEffect con debounce
-
-  // Reemplazar el componente FilterContent actual con esta versión:
-  // Update the FilterContent component to include a select for contacts
-  const FilterContent = () => {
-    // Estado local para el valor del input de empresa
-    const [companyNameInput, setCompanyNameInput] = useState(filters.companyName)
+  // FilterContent con estado local - no modifica estado padre hasta aplicar
+  const FilterContent = ({ onClose }: { onClose?: () => void }) => {
     const [localUserRole, setLocalUserRole] = useState<string | null>(null)
-    const [contactoId, setContactoId] = useState<string | null>(null)
-    const [contadorId, setContadorId] = useState<string | null>(null)
+    const [localFilters, setLocalFilters] = useState({
+      companyName: "",
+      statuses: [] as string[],
+      contadorIds: [] as string[],
+      processIds: [] as string[],
+      contactoIds: [] as string[],
+    })
+    const initialized = useRef(false)
 
-    // Obtener el rol del usuario, el ID del contacto y el ID del contador si aplica
+    // Inicializar filtros locales una sola vez al montar
     useEffect(() => {
+      if (initialized.current) return
+      
       const role = localStorage.getItem("userRole")
       setLocalUserRole(role)
 
+      // Copiar filtros actuales del padre
+      const initialFilters = { ...filters }
+
       if (role === "contacto") {
         const contactId = getLoggedContactoId()
-        setContactoId(contactId)
-
-        // Si es rol contacto, establecer automáticamente el filtro de contacto
-        if (contactId && (!filters.contactoIds || !filters.contactoIds.includes(contactId))) {
-          handleFilter("contactoIds", [contactId])
+        if (contactId) {
+          initialFilters.contactoIds = [contactId]
         }
       } else if (role === "contador") {
-        // Si es rol contador, obtener su ID y establecerlo como filtro
         const contId = getLoggedContadorId()
-        setContadorId(contId)
-
-        // Establecer automáticamente el filtro de contador
-        if (contId && (!filters.contadorIds || !filters.contadorIds.includes(contId))) {
-          handleFilter("contadorIds", [contId])
+        if (contId) {
+          initialFilters.contadorIds = [contId]
         }
       }
-    }, [filters.contactoIds, filters.contadorIds, handleFilter])
 
-    // Manejar cambio en el input de empresa con debounce
-    const handleCompanyNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value
-      setCompanyNameInput(value)
+      setLocalFilters(initialFilters)
+      initialized.current = true
+    }, [])
 
-      // Usar debounce para la llamada al backend
-      clearTimeout((window as any).companyFilterTimeout)
-      ;(window as any).companyFilterTimeout = setTimeout(() => {
-        handleFilter("companyName", value)
-      }, 500)
+    const handleApplyFilters = () => {
+      setFilters(localFilters)
+      setCurrentPage(1)
+      fetchClients(1, currentLimit, localFilters)
+      onClose?.()
     }
 
-    // Actualizar el input local cuando cambia el filtro global
-    useEffect(() => {
-      setCompanyNameInput(filters.companyName)
-    }, [filters.companyName])
+    const handleClearFilters = () => {
+      const emptyFilters = {
+        companyName: "",
+        statuses: [] as string[],
+        contadorIds: [] as string[],
+        processIds: [] as string[],
+        contactoIds: [] as string[],
+      }
+
+      const userRole = localStorage.getItem("userRole")
+      if (userRole === "contacto") {
+        const contactoId = getLoggedContactoId()
+        if (contactoId) {
+          emptyFilters.contactoIds = [contactoId]
+        }
+      } else if (userRole === "contador") {
+        const contadorId = getLoggedContadorId()
+        if (contadorId) {
+          emptyFilters.contadorIds = [contadorId]
+        }
+      }
+
+      setLocalFilters(emptyFilters)
+      setFilters(emptyFilters)
+      setCurrentPage(1)
+      fetchClients(1, currentLimit, emptyFilters)
+      onClose?.()
+    }
 
     return (
       <div className="space-y-4">
@@ -1003,8 +1016,8 @@ export default function DashboardPage() {
           <Input
             id="companyName"
             placeholder="Filtrar por empresa"
-            value={companyNameInput}
-            onChange={handleCompanyNameChange}
+            value={localFilters.companyName}
+            onChange={(e) => setLocalFilters(prev => ({ ...prev, companyName: e.target.value }))}
             className="text-sm h-8"
           />
         </div>
@@ -1020,15 +1033,15 @@ export default function DashboardPage() {
               <div key={status.value} className="flex items-center space-x-2">
                 <Checkbox
                   id={`status-${status.value}`}
-                  checked={filters.statuses.includes(status.value)}
+                  checked={localFilters.statuses.includes(status.value)}
                   onCheckedChange={(checked) => {
                     if (checked) {
-                      handleFilter("statuses", [...filters.statuses, status.value])
+                      setLocalFilters(prev => ({ ...prev, statuses: [...prev.statuses, status.value] }))
                     } else {
-                      handleFilter(
-                        "statuses",
-                        filters.statuses.filter((s) => s !== status.value),
-                      )
+                      setLocalFilters(prev => ({
+                        ...prev,
+                        statuses: prev.statuses.filter((s) => s !== status.value),
+                      }))
                     }
                   }}
                 />
@@ -1047,8 +1060,8 @@ export default function DashboardPage() {
             <Label htmlFor="contadorIds">Responsables</Label>
             <SearchableSelect
               options={allContadores.map((contador) => ({ label: contador.name, value: contador.id }))}
-              selected={filters.contadorIds}
-              onChange={(selected) => handleFilter("contadorIds", selected)}
+              selected={localFilters.contadorIds}
+              onChange={(selected) => setLocalFilters(prev => ({ ...prev, contadorIds: Array.isArray(selected) ? selected : selected ? [selected] : [] }))}
               multiple={true}
               placeholder="Seleccionar responsables"
             />
@@ -1069,8 +1082,8 @@ export default function DashboardPage() {
             <Label htmlFor="contactoIds">Contactos</Label>
             <SearchableSelect
               options={allContacts.map((contact) => ({ label: contact.name, value: contact.id }))}
-              selected={filters.contactoIds}
-              onChange={(selected) => handleFilter("contactoIds", selected)}
+              selected={localFilters.contactoIds}
+              onChange={(selected) => setLocalFilters(prev => ({ ...prev, contactoIds: Array.isArray(selected) ? selected : selected ? [selected] : [] }))}
               multiple={true}
               placeholder="Seleccionar contactos"
             />
@@ -1081,15 +1094,25 @@ export default function DashboardPage() {
           <Label htmlFor="processIds">Procesos</Label>
           <SearchableSelect
             options={allProcesses.map((process) => ({ label: process.name, value: process.id }))}
-            selected={filters.processIds}
-            onChange={(selected) => handleFilter("processIds", selected)}
+            selected={localFilters.processIds}
+            onChange={(selected) => setLocalFilters(prev => ({ ...prev, processIds: Array.isArray(selected) ? selected : selected ? [selected] : [] }))}
             multiple={true}
             placeholder="Seleccionar procesos"
           />
         </div>
-        <Button onClick={clearFilters} variant="outline" className="w-full bg-transparent">
-          Limpiar filtros
-        </Button>
+
+        {/* Botones de acción */}
+        <div className="space-y-2 pt-4 border-t">
+          <Button 
+            onClick={handleApplyFilters} 
+            className="w-full bg-primary text-white hover:bg-primary/90"
+          >
+            Aplicar filtros
+          </Button>
+          <Button onClick={handleClearFilters} variant="outline" className="w-full bg-transparent">
+            Limpiar filtros
+          </Button>
+        </div>
       </div>
     )
   }
@@ -1297,7 +1320,11 @@ export default function DashboardPage() {
   ])
 
   // Move the useEffect hook that calls fetchData outside the conditional rendering
+  // Solo ejecutar en carga inicial, no cuando cambian los filtros
+  const dataFetchedRef = useRef(false)
   useEffect(() => {
+    if (dataFetchedRef.current) return
+    dataFetchedRef.current = true
     fetchData()
   }, [fetchData])
 
@@ -1432,7 +1459,7 @@ export default function DashboardPage() {
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   <span className="whitespace-nowrap">Cerrar sesión</span>
                 </Button>
-                <Sheet>
+                <Sheet open={isFilterSheetOpen} onOpenChange={setIsFilterSheetOpen}>
                   <SheetTrigger asChild>
                     <Button variant="outline" className="h-10 w-10 flex items-center justify-center bg-transparent">
                       <Filter className="h-4 w-4" />
@@ -1445,7 +1472,7 @@ export default function DashboardPage() {
                       <SheetDescription>Ajusta los filtros para el dashboard</SheetDescription>
                     </SheetHeader>
                     <div className="mt-4">
-                      <FilterContent />
+                      <FilterContent onClose={() => setIsFilterSheetOpen(false)} />
                     </div>
                   </SheetContent>
                 </Sheet>
