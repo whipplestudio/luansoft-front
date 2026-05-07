@@ -768,7 +768,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
       // fetchCurrentProcesses()
     } catch (error: any) {
       console.error('Error uploading files:', error)
-      toast.error(error.response?.data?.message || 'Error al subir los archivos')
+      toast.error(error.response?.data?.message || 'Error al subir los archivos', { duration: 5000 })
     } finally {
       setIsUploading(false)
     }
