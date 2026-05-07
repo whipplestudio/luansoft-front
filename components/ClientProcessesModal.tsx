@@ -1185,7 +1185,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
                 <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-slate-50 to-slate-100/50">
                   <div className="max-w-6xl mx-auto">
                     {/* Upload Section - Solo para a.pulido@whipple.mx */}
-                    {userEmail === 'a.pulido@whipple.mx' && (
+                    {userEmail === 'a.pulido@whipple.mx' || userEmail === 'luengasantonio@gmail.com' && (
                       <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden mb-6">
                       <CardContent className="p-8">
                         <div className="space-y-6">
