@@ -29,6 +29,26 @@ module.exports = {
         "dark-brown": "#998542", // Pantone 448 C
         "accent-green": "#006341", // Pantone 3425 C (same as primary-green)
 
+        // Material Design 3 colors
+        surface: {
+          DEFAULT: "rgb(var(--md-surface) / <alpha-value>)",
+          "container-low": "rgb(var(--md-surface-container-low) / <alpha-value>)",
+          "container-lowest": "rgb(var(--md-surface-container-lowest) / <alpha-value>)",
+          "container": "rgb(var(--md-surface-container) / <alpha-value>)",
+          "container-high": "rgb(var(--md-surface-container-high) / <alpha-value>)",
+          "container-highest": "rgb(var(--md-surface-container-highest) / <alpha-value>)",
+        },
+        "on-surface": {
+          DEFAULT: "rgb(var(--md-on-surface) / <alpha-value>)",
+          variant: "rgb(var(--md-on-surface-variant) / <alpha-value>)",
+        },
+        "secondary-container": "rgb(var(--md-secondary-container) / <alpha-value>)",
+        "on-secondary-container": "rgb(var(--md-on-secondary-container) / <alpha-value>)",
+        outline: {
+          DEFAULT: "rgb(var(--md-outline) / <alpha-value>)",
+          variant: "rgb(var(--md-outline-variant) / <alpha-value>)",
+        },
+
         // Theme colors mapping
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -82,6 +102,11 @@ module.exports = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        "elevation-1": "var(--md-shadow-1)",
+        "elevation-2": "var(--md-shadow-2)",
+        "elevation-3": "var(--md-shadow-3)",
       },
       keyframes: {
         "accordion-down": {

@@ -37,6 +37,31 @@
 
     /* Add a font-family variable if you want to reference it in your styles */
     --font-family: "Jost", sans-serif;
+
+    /* Material Design 3 colors - Surface Tones */
+    --md-surface: 255 255 255;
+    --md-surface-container-lowest: 255 255 255;
+    --md-surface-container-low: 248 249 250;
+    --md-surface-container: 236 240 243;
+    --md-surface-container-high: 227 232 236;
+    --md-surface-container-highest: 217 223 228;
+
+    /* Material Design 3 - On Surface colors */
+    --md-on-surface: 24 28 32;
+    --md-on-surface-variant: 64 73 79;
+
+    /* Material Design 3 - Container colors */
+    --md-secondary-container: 206 219 228;
+    --md-on-secondary-container: 15 44 60;
+
+    /* Material Design 3 - Outline */
+    --md-outline: 112 121 126;
+    --md-outline-variant: 196 199 203;
+
+    /* Material Design 3 - Elevation shadows */
+    --md-shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 1px rgb(0 0 0 / 0.1);
+    --md-shadow-2: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 2px 6px 2px rgb(0 0 0 / 0.1);
+    --md-shadow-3: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 4px 8px 3px rgb(0 0 0 / 0.1);
   }
 
   /* You can also add this to ensure the font is applied globally */
@@ -53,6 +78,23 @@
     --sidebar-accent-foreground: 0 0% 100%; /* White */
     --sidebar-border: 170 40% 20%; /* Slightly lighter than dark green */
     --sidebar-ring: 40 40% 43%; /* Gold */
+
+    /* Material Design 3 - Dark Mode */
+    --md-surface: 16 20 24;
+    --md-surface-container-lowest: 12 15 18;
+    --md-surface-container-low: 22 27 32;
+    --md-surface-container: 32 38 45;
+    --md-surface-container-high: 43 50 58;
+    --md-surface-container-highest: 54 62 71;
+    --md-on-surface: 227 227 229;
+    --md-on-surface-variant: 176 184 191;
+    --md-secondary-container: 48 70 86;
+    --md-on-secondary-container: 206 219 228;
+    --md-outline: 140 147 152;
+    --md-outline-variant: 67 71 75;
+    --md-shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
+    --md-shadow-2: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+    --md-shadow-3: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
 
     --background: 170 40% 10%; /* Darker version of Dark Green */
     --foreground: 40 20% 90%; /* Light gold/beige */

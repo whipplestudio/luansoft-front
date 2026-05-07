@@ -64,14 +64,17 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
   
   // Estado para email del usuario (restricción de acceso)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   // Cargar email del usuario y reportes cuando se abre el modal
   useEffect(() => {
     if (isOpen && client) {
-      // Obtener email del usuario
+      // Obtener email y rol del usuario
       const email = localStorage.getItem('userEmail')
+      const role = localStorage.getItem('userRole')
       setUserEmail(email)
-      
+      setUserRole(role)
+
       // Cargar reportes disponibles
       loadAvailableReports()
     }
@@ -541,8 +544,8 @@ export function ClienteDetailModal({ isOpen, onClose, client }: ClienteDetailMod
           <TabsContent value="reports" className="space-y-5 mt-0">
             <div className="p-6 bg-gradient-to-br from-slate-50 to-slate-100/50">
               <div className="max-w-6xl mx-auto">
-                {/* Upload Section - Solo para a.pulido@whipple.mx */}
-                {userEmail === 'a.pulido@whipple.mx' || userEmail === 'luengasantonio@gmail.com' && (
+                {/* Upload Section - Solo para administradores */}
+                {userRole === 'admin' && (
                   <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden mb-6">
                   <CardContent className="p-8">
                     <div className="space-y-6">

@@ -155,8 +155,9 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   
-  // Estado para email del usuario (restricción de acceso)
+  // Estado para email y rol del usuario (restricción de acceso)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   // Estados para filtro de rango de fechas
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -797,7 +798,7 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
     }
   }
 
-  // Cargar email del usuario desde localStorage
+  // Cargar email y rol del usuario desde localStorage
   useEffect(() => {
     try {
       const userData = localStorage.getItem("user")
@@ -805,6 +806,8 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
         const user = JSON.parse(userData)
         setUserEmail(user.email || null)
       }
+      const role = localStorage.getItem("userRole")
+      setUserRole(role)
     } catch (error) {
       console.error("Error parsing user data:", error)
     }
@@ -1184,8 +1187,8 @@ export function ClientProcessesModal({ isOpen, onClose, client }: ClientProcesse
               >
                 <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-br from-slate-50 to-slate-100/50">
                   <div className="max-w-6xl mx-auto">
-                    {/* Upload Section - Solo para a.pulido@whipple.mx */}
-                    {userEmail === 'a.pulido@whipple.mx' || userEmail === 'luengasantonio@gmail.com' && (
+                    {/* Upload Section - Solo para administradores */}
+                    {userRole === 'admin' && (
                       <Card className="border-2 border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden mb-6">
                       <CardContent className="p-8">
                         <div className="space-y-6">

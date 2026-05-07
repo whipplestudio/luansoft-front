@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { ArrowUpDown, Filter, Maximize, Minimize, Grid, List, ArrowLeft, Loader2, Check } from "lucide-react"
+import { ArrowUpDown, Filter, Maximize, Minimize, Grid, List, ArrowLeft, Loader2, Check, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable } from "@/components/data-table"
@@ -21,6 +21,7 @@ import type { FiscalDeliverable, SemaphoreStatus, Process, ApiClient } from "@/t
 import { ClientDetailDialog } from "@/components/ClientDetailDialog"
 import { useRouter } from "next/navigation"
 import { axiosInstance } from "@/lib/axios"
+import axios from "axios"
 import { toast } from "sonner"
 import { debounce } from "lodash"
 import { Logo } from "@/components/Logo"
@@ -408,6 +409,9 @@ export default function DashboardPage() {
   const [selectedClient, setSelectedClient] = useState<FiscalDeliverable | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<string>("")
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [isLoading, setIsLoading] = useState(true)
   const [allContadores, setAllContadores] = useState<{ id: string; name: string }[]>([])
   const [allProcesses, setAllProcesses] = useState<{ id: string; name: string }[]>([])
@@ -1166,6 +1170,44 @@ export default function DashboardPage() {
     }
   }, [isFullscreen, fetchAllClients, allClientsData.length, isLoadingAllClients])
 
+  // Función para enviar reportes mensuales a todos los clientes
+  const handleSendMonthlyReports = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://luansoft-api-837868015612.us-central1.run.app/api"
+      const apiKey = process.env.NEXT_PUBLIC_API_KEY || "e3b7ba168b3861c371bad80e284c71b82b4ef6a81826651e4cad693d7d3a02c2"
+
+      const response = await axios.post(
+        `${apiUrl}/monthly-reports/send-all`,
+        {
+          year: selectedYear,
+          month: selectedMonth,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+          },
+        }
+      )
+
+      toast.success(response.data?.message || "Reportes mensuales enviados exitosamente", { duration: 5000 })
+    } catch (error: any) {
+      console.error("Error enviando reportes mensuales:", error)
+      const errorMessage = error.response?.data?.message || "Error al enviar los reportes mensuales"
+      toast.error(errorMessage, { duration: 5000 })
+    }
+  }
+
+  // Inicializar mes y año por defecto (mes anterior)
+  useEffect(() => {
+    const now = new Date()
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const defaultYear = lastMonth.getFullYear()
+    const defaultMonth = String(lastMonth.getMonth() + 1).padStart(2, "0")
+    setSelectedYear(defaultYear)
+    setSelectedMonth(defaultMonth)
+  }, [])
+
   // Modificar la sección useEffect que obtiene el rol del usuario
 
   // Buscar la sección donde se verifica el rol del usuario y añadir el rol "contacto"
@@ -1174,6 +1216,17 @@ export default function DashboardPage() {
     setUserRole(role)
     const isClientUser = role === "cliente"
     setIsClient(isClientUser)
+
+    // Obtener el email del usuario desde localStorage
+    const user = localStorage.getItem("user")
+    if (user) {
+      try {
+        const userData = JSON.parse(user)
+        setUserEmail(userData.email || null)
+      } catch (error) {
+        console.error("Error al obtener el email del usuario:", error)
+      }
+    }
   }, [])
 
   // Añadir este useEffect después del useEffect que establece userRole
@@ -1275,6 +1328,93 @@ export default function DashboardPage() {
             {/* Clase común para todos los botones de la barra de herramientas */}
             {!isFullscreen && (
               <>
+                {/* Sección de envío de reportes mensuales - Solo para administradores */}
+                {userRole === 'admin' && (
+                  <div className="flex items-center gap-3 bg-surface-container-low rounded-xl px-4 py-2 border border-outline-variant">
+                    {/* Label de la sección */}
+                    <span className="text-xs font-medium text-on-surface-variant whitespace-nowrap">Reportes:</span>
+
+                    {/* Selector de Mes - Material Design 3 */}
+                    <div className="relative">
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="h-8 w-[110px] bg-white border border-outline shadow-sm focus:ring-2 focus:ring-primary/20 text-on-surface text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                          <SelectValue placeholder="Mes" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white rounded-xl border border-gray-200 shadow-lg z-50">
+                          {[
+                            { value: "01", label: "Enero" },
+                            { value: "02", label: "Febrero" },
+                            { value: "03", label: "Marzo" },
+                            { value: "04", label: "Abril" },
+                            { value: "05", label: "Mayo" },
+                            { value: "06", label: "Junio" },
+                            { value: "07", label: "Julio" },
+                            { value: "08", label: "Agosto" },
+                            { value: "09", label: "Septiembre" },
+                            { value: "10", label: "Octubre" },
+                            { value: "11", label: "Noviembre" },
+                            { value: "12", label: "Diciembre" },
+                          ].map((month) => (
+                            <SelectItem
+                              key={month.value}
+                              value={month.value}
+                              className="text-on-surface text-sm hover:bg-secondary-container hover:text-on-secondary-container rounded-lg cursor-pointer focus:bg-secondary-container focus:text-on-secondary-container"
+                            >
+                              {month.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Divider - Material Design 3 */}
+                    <div className="w-px h-5 bg-outline-variant" />
+
+                    {/* Selector de Año - Material Design 3 */}
+                    <div className="relative">
+                      <Select
+                        value={selectedYear.toString()}
+                        onValueChange={(value) => setSelectedYear(Number.parseInt(value))}
+                      >
+                        <SelectTrigger className="h-8 w-[85px] bg-white border border-outline shadow-sm focus:ring-2 focus:ring-primary/20 text-on-surface text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                          <SelectValue placeholder="Año" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white rounded-xl border border-gray-200 shadow-lg z-50 max-h-[200px]">
+                          {Array.from({ length: 6 }, (_, i) => {
+                            const year = new Date().getFullYear() - 2 + i
+                            return (
+                              <SelectItem
+                                key={year}
+                                value={year.toString()}
+                                className="text-on-surface text-sm hover:bg-secondary-container hover:text-on-secondary-container rounded-lg cursor-pointer focus:bg-secondary-container focus:text-on-secondary-container"
+                              >
+                                {year}
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Botón Enviar - Material Design 3 Filled Button */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            onClick={handleSendMonthlyReports}
+                            className="h-8 px-3 ml-1 bg-primary text-on-primary hover:bg-primary/90 rounded-lg text-sm font-medium shadow-elevation-1 hover:shadow-elevation-2 transition-all"
+                          >
+                            <Mail className="mr-1.5 h-4 w-4" />
+                            <span className="whitespace-nowrap">Enviar Reportes</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="bg-surface-container-high text-on-surface text-xs">
+                          Enviar reportes mensuales por email a todos los clientes activos
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   className="h-10 px-4 flex items-center justify-center bg-transparent"
